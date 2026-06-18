@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.db
+horarios_data.xlsx
+.env
+.claude/

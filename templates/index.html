@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Horarios de Personal</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <a class="logo" href="#">
+      <span class="logo-text">Horarios<span class="logo-dot"> ·</span> Personal</span>
+    </a>
+    <nav>
+      <button class="nav-btn active" data-view="semana">Semana</button>
+      <button class="nav-btn" data-view="extras">Horas Extra</button>
+      <button class="nav-btn" data-view="empleados">Empleados</button>
+      <button class="nav-btn" data-view="compensatorios">Compensatorios</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+<!-- ═══════════════ SEMANA ═══════════════ -->
+<section id="view-semana" class="view active">
+  <div class="week-toolbar">
+    <div class="week-nav-group">
+      <button class="arrow-btn" id="btn-prev">&#8592;</button>
+      <div class="week-badge" id="week-badge">S#1</div>
+      <button class="arrow-btn" id="btn-next">&#8594;</button>
+    </div>
+    <select class="week-year-select" id="year-select"></select>
+    <span class="week-dates" id="week-dates"></span>
+    <div class="week-toolbar-right">
+      <input type="text" class="search-input" id="week-search" placeholder="Filtrar empleado..." style="width:160px">
+      <div class="day-range-toggle">
+        <button class="day-range-btn active" data-range="week" title="Lunes a Viernes">L–V</button>
+        <button class="day-range-btn" data-range="weekend" title="Fin de semana">S–D</button>
+      </div>
+      <div class="view-toggle">
+        <button class="view-toggle-btn active" data-mode="tabla" title="Vista tabla">⊞</button>
+        <button class="view-toggle-btn" data-mode="cards" title="Vista tarjetas">▦</button>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="btn-excel-upload" title="Importar Excel">↑ Excel</button>
+      <button class="btn btn-ghost btn-sm" id="btn-repetir" title="Copiar todos los turnos a la semana siguiente">↻ Repetir</button>
+      <button class="btn btn-gsheets" id="btn-gsheets-sync">⟳ Google Sheets</button>
+      <a class="btn btn-ghost btn-sm" id="btn-excel-download" href="/api/excel/download" download>↓ Plantilla</a>
+      <button class="btn btn-primary" id="btn-add-turno">+ Turno</button>
+    </div>
+    <input type="file" id="excel-file-input" accept=".xlsx,.xls" style="display:none">
+  </div>
+  <div id="schedule-container">
+    <div class="schedule-grid hidden" id="schedule-grid"></div>
+    <div id="schedule-table-wrap"><div class="loading">Cargando...</div></div>
+  </div>
+</section>
+
+<!-- ═══════════════ HORAS EXTRA ═══════════════ -->
+<section id="view-extras" class="view">
+  <div class="week-toolbar">
+    <div class="week-nav-group">
+      <button class="arrow-btn" id="extras-btn-prev">&#8592;</button>
+      <div class="week-badge" id="extras-week-badge">S#1</div>
+      <button class="arrow-btn" id="extras-btn-next">&#8594;</button>
+    </div>
+    <select class="week-year-select" id="extras-year-select"></select>
+    <span class="week-dates" id="extras-week-dates"></span>
+  </div>
+  <div id="extras-wrap"><div class="loading">Cargando...</div></div>
+</section>
+
+<!-- ═══════════════ EMPLEADOS ═══════════════ -->
+<section id="view-empleados" class="view">
+  <div class="toolbar">
+    <input type="text" class="search-input" id="emp-search" placeholder="Buscar empleado..." style="width:240px">
+    <button class="btn btn-primary" id="btn-add-emp">+ Empleado</button>
+  </div>
+  <div id="emp-grid" class="emp-grid"><div class="loading">Cargando...</div></div>
+
+  <div id="emp-detail" class="hidden">
+    <div class="detail-header">
+      <button class="btn btn-ghost btn-sm" id="emp-back">&#8592; Volver</button>
+      <h2 id="emp-detail-name"></h2>
+      <button class="btn btn-ghost btn-sm" id="btn-edit-emp">Editar</button>
+      <button class="btn btn-danger btn-sm" id="btn-del-emp">Eliminar</button>
+    </div>
+    <div class="stats-row" id="emp-stats"></div>
+    <div id="emp-comp-section"></div>
+  </div>
+</section>
+
+<!-- ═══════════════ COMPENSATORIOS ═══════════════ -->
+<section id="view-compensatorios" class="view">
+  <div class="toolbar">
+    <input type="text" class="search-input" id="comp-search" placeholder="Buscar empleado..." style="width:240px">
+    <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--text2)">
+      <input type="checkbox" id="comp-only-pending"> Solo con saldo
+    </label>
+    <button class="btn btn-ghost btn-sm" id="btn-manage-feriados">Gestionar Feriados</button>
+  </div>
+  <div id="comp-wrap" class="comp-wrap"><div class="loading">Cargando...</div></div>
+</section>
+
+</main>
+
+<!-- ═══════════════ MODALES ═══════════════ -->
+
+<!-- Turno modal -->
+<div class="modal-overlay" id="modal-turno">
+  <div class="modal">
+    <h3 id="modal-turno-title">Agregar Turno</h3>
+    <div class="form-group">
+      <label>Tipo</label>
+      <div class="tipo-toggle">
+        <button class="tipo-btn active-trabajo" data-tipo="trabajo">Trabajo</button>
+        <button class="tipo-btn" data-tipo="libre">Libre / Franco</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Fecha</label>
+      <input type="date" class="form-input" id="t-fecha">
+    </div>
+    <div class="form-group">
+      <label>Empleado</label>
+      <select class="form-select" id="t-empleado"></select>
+    </div>
+    <div id="t-trabajo-fields">
+      <div class="form-group">
+        <label>Función</label>
+        <select class="form-select" id="t-funcion">
+          <option value="">— Sin función —</option>
+          <option>AIRE</option>
+          <option>EDICION</option>
+          <option>ZOCALOS</option>
+          <option>PLACAS</option>
+          <option>TEXTOS</option>
+          <option>CONTENIDOS</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Canal</label>
+        <select class="form-select" id="t-canal">
+          <option value="">— Sin canal —</option>
+          <option>ESPN</option>
+          <option>ESPN 2/ESPN3</option>
+          <option>CHI</option>
+          <option>COL</option>
+          <option>CAM</option>
+          <option>REGIONES</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Show inicio</label>
+          <input type="time" class="form-input" id="t-show-ini">
+        </div>
+        <div class="form-group">
+          <label>Show fin</label>
+          <input type="time" class="form-input" id="t-show-fin">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Ingreso</label>
+          <input type="time" class="form-input" id="t-ingreso">
+        </div>
+        <div class="form-group">
+          <label>Egreso</label>
+          <input type="time" class="form-input" id="t-egreso">
+        </div>
+      </div>
+      <div id="t-horas-preview" style="font-size:0.78rem;color:var(--text2);margin-top:-0.5rem;margin-bottom:0.9rem;"></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" id="modal-turno-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="modal-turno-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Empleado modal -->
+<div class="modal-overlay" id="modal-emp">
+  <div class="modal">
+    <h3 id="modal-emp-title">Nuevo Empleado</h3>
+    <div class="form-group">
+      <label>Nombre completo</label>
+      <input type="text" class="form-input" id="e-nombre" placeholder="Apellido Nombre">
+    </div>
+    <div class="form-group">
+      <label>Función</label>
+      <input type="text" class="form-input" id="e-funcion" placeholder="Camarógrafo, Productor...">
+    </div>
+    <div class="form-group">
+      <label>Empresa</label>
+      <input type="text" class="form-input" id="e-empresa" placeholder="ESPN, PEGSA...">
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" id="modal-emp-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="modal-emp-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Feriados modal -->
+<div class="modal-overlay" id="modal-feriados">
+  <div class="modal">
+    <h3>Feriados</h3>
+    <div class="feriados-grid" id="feriados-list"></div>
+    <div class="form-row" style="margin-top:0.5rem;">
+      <div class="form-group">
+        <label>Fecha</label>
+        <input type="date" class="form-input" id="f-fecha">
+      </div>
+      <div class="form-group">
+        <label>Descripción</label>
+        <input type="text" class="form-input" id="f-desc" placeholder="Ej: Año Nuevo">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" id="modal-feriados-close">Cerrar</button>
+      <button class="btn btn-primary" id="modal-feriados-add">+ Agregar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Compensatorio usado modal -->
+<div class="modal-overlay" id="modal-comp-usar">
+  <div class="modal">
+    <h3>Registrar Franco Compensatorio Usado</h3>
+    <p style="font-size:0.82rem;color:var(--text2);margin-bottom:1rem;" id="comp-usar-emp-label"></p>
+    <div class="form-group">
+      <label>Fecha en que se tomó el franco</label>
+      <input type="date" class="form-input" id="cu-fecha">
+    </div>
+    <div class="form-group">
+      <label>Descripción (opcional)</label>
+      <input type="text" class="form-input" id="cu-desc" placeholder="Ej: Franco por 1 de Mayo">
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" id="modal-comp-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="modal-comp-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Google Sheets sync modal -->
+<div class="modal-overlay" id="modal-gsheets">
+  <div class="modal" style="max-width:420px">
+    <h3>Sincronizar desde Google Sheets</h3>
+    <p style="color:var(--text2);font-size:0.83rem;margin:0.5rem 0 1rem">
+      Lee la info directamente de la planilla publica.<br>
+      Los turnos existentes de las semanas seleccionadas seran reemplazados.
+    </p>
+    <div class="form-row">
+      <label>Anio</label>
+      <input type="number" id="gs-year" value="2026" min="2024" max="2030" style="width:100px">
+    </div>
+    <div class="form-row">
+      <label>Semanas</label>
+      <div style="display:flex;gap:0.5rem;align-items:center">
+        <input type="number" id="gs-week-from" value="1" min="1" max="52" style="width:70px"> a
+        <input type="number" id="gs-week-to" value="1" min="1" max="52" style="width:70px">
+        <button class="btn btn-ghost btn-sm" id="gs-btn-all">Todas</button>
+      </div>
+    </div>
+    <div id="gs-status" style="margin:0.8rem 0;font-size:0.82rem;min-height:1.2rem"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="gs-cancel">Cancelar</button>
+      <button class="btn btn-gsheets" id="gs-confirm">Sincronizar</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+
+</body>
+</html>
