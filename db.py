@@ -31,6 +31,7 @@ def init_db():
             semana INTEGER,
             empleado_id INTEGER NOT NULL,
             tipo TEXT NOT NULL DEFAULT 'trabajo',
+            funcion TEXT DEFAULT '',
             canal TEXT DEFAULT '',
             show_inicio TEXT DEFAULT '',
             show_fin TEXT DEFAULT '',
