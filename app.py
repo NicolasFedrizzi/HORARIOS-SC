@@ -453,6 +453,11 @@ def api_gsheets_status():
 
 @app.route('/api/gsheets/sync', methods=['POST'])
 def api_gsheets_sync():
+    secret = os.environ.get('SYNC_SECRET')
+    if secret:
+        data_raw = request.get_json() or {}
+        if data_raw.get('secret') != secret:
+            return jsonify({'error': 'No autorizado'}), 403
     data  = request.get_json() or {}
     year  = int(data.get('year', date.today().year))
     weeks = data.get('weeks', list(range(1, 53)))
