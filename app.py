@@ -476,20 +476,28 @@ def api_gsheets_sync():
 init_db()
 
 def _auto_sync():
-    """Al arrancar, sincroniza semana actual ± 2 desde Google Sheets si no hay datos."""
+    """Al arrancar, sincroniza semana actual ± 2 si alguna de esas semanas no tiene datos."""
     try:
-        db = get_db()
-        count = db.execute("SELECT COUNT(*) FROM turnos").fetchone()[0]
-        db.close()
-        if count > 0:
-            return  # ya hay datos, no hacer nada
         today = date.today()
         current_week = today.isocalendar()[1]
         year = today.year
         weeks = [w for w in range(current_week - 2, current_week + 3) if 1 <= w <= 52]
+
         db = get_db()
-        import_from_gsheets(db, year, weeks)
+        weeks_to_sync = []
+        for w in weeks:
+            count = db.execute(
+                "SELECT COUNT(*) FROM turnos WHERE semana=? AND strftime('%Y', fecha)=?",
+                (w, str(year))
+            ).fetchone()[0]
+            if count == 0:
+                weeks_to_sync.append(w)
         db.close()
+
+        if weeks_to_sync:
+            db = get_db()
+            import_from_gsheets(db, year, weeks_to_sync)
+            db.close()
     except Exception:
         pass
 
