@@ -340,14 +340,20 @@ function renderTableView(data) {
     });
 
     var slots = Array.from(slotMap.values()).sort(function(a, b) {
-      if (fn === 'EDICION') return (a.show_inicio || 'ZZ').localeCompare(b.show_inicio || 'ZZ');
+      if (fn === 'EDICION') {
+        var cc = (a.canal || '').localeCompare(b.canal || '');
+        if (cc !== 0) return cc;
+        return (a.show_inicio || 'ZZ').localeCompare(b.show_inicio || 'ZZ');
+      }
       return showSortKey(a.ingreso) - showSortKey(b.ingreso);
     });
 
-    var rows = slots.map(function(slot) {
+    var rows = slots.map(function(slot, i) {
+      var prevSlot = i > 0 ? slots[i - 1] : null;
       return {
         canal: slot.canal, show_inicio: slot.show_inicio, show_fin: slot.show_fin,
         ingreso: slot.ingreso, egreso: slot.egreso,
+        canalBreak: fn === 'EDICION' ? (!prevSlot || prevSlot.canal !== slot.canal) : (i === 0),
         perDay: dias.map(function(_, di) {
           return dayTurnos[di].filter(function(t) {
             if (fn === 'EDICION') {
@@ -375,7 +381,7 @@ function renderTableView(data) {
   });
 
   var html = '<table class="sched-table"><thead><tr>' +
-    '<th class="th-left">SEÑAL / HORARIO</th>' + thDays +
+    '<th class="th-left"></th>' + thDays +
     '</tr></thead><tbody>';
 
   var CANAL_LABELS = {
@@ -383,51 +389,65 @@ function renderTableView(data) {
     'COL': 'ESPN COL', 'CAM': 'ESPN CAM', 'REGIONES': 'REGIONES'
   };
 
+  // Pre-calcular rowspans
+  var showCanalRowspans = {};
+  showRows.forEach(function(r) {
+    showCanalRowspans[r.canal] = (showCanalRowspans[r.canal] || 0) + 1;
+  });
+  var sectionRowspans = {};   // para PLACAS/TEXTOS/CONTENIDOS: total de rows
+  var edicionCanalRowspans = {};  // para EDICION: rows por canal
+  sections.forEach(function(sec) {
+    if (sec.fn === 'EDICION') {
+      sec.rows.forEach(function(r) {
+        edicionCanalRowspans[r.canal] = (edicionCanalRowspans[r.canal] || 0) + 1;
+      });
+    } else if (!sec.isShow) {
+      sectionRowspans[sec.fn] = sec.rows.length;
+    }
+  });
+
   sections.forEach(function(sec) {
     var fn = sec.fn;
-    // Encabezado de sección
-    html += '<tr class="section-hdr fn-' + fn + '">' +
-      '<td colspan="' + (1 + dias.length) + '"><span class="section-badge">' + fn + '</span></td>' +
-      '</tr>';
+    // Separador de sección (solo una línea divisoria, sin badge)
+    html += '<tr class="section-hdr fn-' + fn + '"><td colspan="' + (1 + dias.length) + '"></td></tr>';
 
     sec.rows.forEach(function(row) {
       var showLabel = row.show_inicio && row.show_fin ? row.show_inicio + ' – ' + row.show_fin : '';
-      var leftHtml = '';
+      var leftCell = '';
 
       if (sec.isShow) {
-        // Insert canal group header row on canal break
+        // Canal name como celda con rowspan en la primera fila de cada canal
         if (row.canalBreak) {
+          var rs = showCanalRowspans[row.canal] || 1;
           var canalLabel = CANAL_LABELS[row.canal] || row.canal || '';
-          html += '<tr class="canal-hdr-row">' +
-            '<td colspan="' + (1 + dias.length) + '"><span class="canal-hdr-label">' + canalLabel + '</span></td>' +
-            '</tr>';
+          leftCell = '<td class="td-left td-show-canal" rowspan="' + rs + '"><span class="td-canal-vert">' + canalLabel + '</span></td>';
         }
-        // Left column empty — show times are shown per-day inside each cell
+        // filas siguientes del mismo canal: sin td-left (ya cubre el rowspan)
+      } else if (fn === 'EDICION') {
+        if (row.canalBreak) {
+          var rs = edicionCanalRowspans[row.canal] || 1;
+          leftCell = '<td class="td-left td-show-canal" rowspan="' + rs + '"><span class="td-canal-vert">' + (row.canal || '') + '</span></td>';
+        }
+        // rows siguientes del mismo canal: sin td-left (cubierto por rowspan)
       } else {
-        // Other functions: EDICION uses show time label, others use ingreso–egreso
-        var leftTop;
-        if (fn === 'EDICION') {
-          leftTop = showLabel || row.canal || fn;
-        } else {
-          leftTop = (row.ingreso && row.egreso) ? row.ingreso + ' – ' + row.egreso : fn;
+        // PLACAS, TEXTOS, CONTENIDOS: label de sección en primera fila
+        if (row.canalBreak) {
+          var rs = sectionRowspans[fn] || 1;
+          leftCell = '<td class="td-left td-show-canal fn-left-' + fn + '" rowspan="' + rs + '"><span class="td-canal-vert">' + fn + '</span></td>';
         }
-        if (leftTop) leftHtml += '<span class="td-canal">' + leftTop + '</span>';
       }
 
       var dayCells = '';
 
       if (sec.isShow) {
-        // Cada celda: show time de ese día + AIRE + ZOCALOS
+        // Cada celda: horario a la izquierda + AIRE + ZOCALOS a la derecha
         row.perDay.forEach(function(daySlot, di) {
           var hasAny = daySlot.aire || daySlot.zocalos;
           if (!hasAny) {
             dayCells += '<td class="td-day td-empty">—</td>';
             return;
           }
-          var cellHtml = '';
-          if (daySlot.showLabel) {
-            cellHtml += '<div class="td-show-time-cell">' + daySlot.showLabel + '</div>';
-          }
+          var peopleHtml = '';
           ['aire', 'zocalos'].forEach(function(key) {
             var t = daySlot[key];
             if (!t) return;
@@ -437,7 +457,7 @@ function renderTableView(data) {
             var parts = t.emp_nombre.trim().split(' ');
             var nameS = parts.length >= 2 ? parts[parts.length-1] + ', ' + parts[0] : t.emp_nombre;
             var shiftS = t.ingreso && t.egreso ? t.ingreso + '–' + t.egreso : '—';
-            cellHtml += '<div class="td-entry sublabel-' + subFn + '">' +
+            peopleHtml += '<div class="td-entry sublabel-' + subFn + '">' +
               '<span class="td-subfn sublabel-' + subFn + '">' + (subFn === 'AIRE' ? 'PROD. AIRE' : 'PROD. ZOCALOS') + '</span>' +
               '<div class="td-name">' + nameS + '</div>' +
               '<div class="td-shift">' + shiftS + extraH + '</div>' +
@@ -447,7 +467,9 @@ function renderTableView(data) {
               '</div>' +
               '</div>';
           });
-          dayCells += '<td class="td-day td-show-cell">' + cellHtml + '</td>';
+          var timeParts = daySlot.showLabel ? daySlot.showLabel.split(' – ') : ['', ''];
+          var timeHtml = '<div class="show-time-left"><span class="st-ini">' + (timeParts[0]||'') + '</span><span class="st-sep">–</span><span class="st-fin">' + (timeParts[1]||'') + '</span></div>';
+          dayCells += '<td class="td-day td-show-cell"><div class="show-cell-inner">' + timeHtml + '<div class="show-people">' + peopleHtml + '</div></div></td>';
         });
       } else {
         row.perDay.forEach(function(turnos, di) {
@@ -476,9 +498,7 @@ function renderTableView(data) {
 
       var rowFn = sec.isShow ? 'SHOW' : fn;
       var canalBreakClass = (sec.isShow && row.canalBreak) ? ' canal-break' : '';
-      html += '<tr class="data-row fn-row-' + rowFn + canalBreakClass + '">' +
-        '<td class="td-left">' + leftHtml + '</td>' + dayCells +
-        '</tr>';
+      html += '<tr class="data-row fn-row-' + rowFn + canalBreakClass + '">' + leftCell + dayCells + '</tr>';
     });
   });
 

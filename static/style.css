@@ -95,11 +95,11 @@ main { max-width:1800px; margin:0 auto; padding:1.25rem 1.5rem; }
 /* Table header */
 .th-left {
   background:var(--bg3); border:1px solid var(--border);
-  padding:0.6rem 0.9rem; text-align:left;
+  padding:0.4rem 0.3rem; text-align:center;
   position:sticky; left:0; top:0; z-index:20;
-  font-size:0.66rem; font-weight:700; color:var(--text2);
-  text-transform:uppercase; letter-spacing:0.08em;
-  min-width:170px;
+  font-size:0.55rem; font-weight:700; color:var(--text2);
+  text-transform:uppercase; letter-spacing:0.06em;
+  width:38px; min-width:38px; max-width:38px;
 }
 .th-day {
   background:var(--bg3); border:1px solid var(--border);
@@ -161,10 +161,12 @@ main { max-width:1800px; margin:0 auto; padding:1.25rem 1.5rem; }
 /* Left sticky column */
 .td-left {
   background:var(--bg2); border:1px solid var(--border);
-  padding:0.5rem 0.85rem;
+  padding:0;
   position:sticky; left:0; z-index:5;
-  vertical-align:middle; min-width:170px;
+  vertical-align:middle;
+  width:38px; min-width:38px; max-width:38px;
 }
+.td-left-empty { border-color:transparent; background:var(--bg); }
 .td-canal { display:block; font-size:0.66rem; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; color:var(--text2); }
 .td-show-time { display:block; font-size:0.95rem; font-weight:700; color:var(--text); margin-top:0.06rem; letter-spacing:-0.01em; }
 .td-show-time-cell { font-size:0.82rem; font-weight:700; color:var(--text); letter-spacing:-0.01em; padding:0.25rem 0.5rem 0.1rem; border-bottom:1px solid var(--border); margin-bottom:0.15rem; }
@@ -173,14 +175,53 @@ main { max-width:1800px; margin:0 auto; padding:1.25rem 1.5rem; }
 .sublabel-AIRE    { color:var(--fn-aire);    background:rgba(56,189,248,0.08); }
 .sublabel-ZOCALOS { color:var(--fn-zocalos); background:rgba(52,211,153,0.08); }
 
-/* Show cell: AIRE + ZOCALOS apilados */
+/* Canal label con rowspan (SHOW section) */
+.td-show-canal {
+  background:var(--bg2); border:1px solid var(--border);
+  border-left:3px solid var(--fn-aire);
+  padding:0.4rem 0.3rem;
+  position:sticky; left:0; z-index:5;
+  vertical-align:middle; text-align:center;
+  width:38px; min-width:38px; max-width:38px;
+}
+.td-canal-vert {
+  display:block;
+  writing-mode:vertical-lr;
+  font-size:0.62rem; font-weight:800; text-transform:uppercase;
+  letter-spacing:0.1em; color:var(--fn-aire);
+  white-space:nowrap;
+}
+
+/* Show cell: horario izquierda + AIRE/ZOCALOS derecha */
 .td-show-cell { vertical-align:top; padding:0; }
+.show-cell-inner { display:flex; align-items:stretch; height:100%; }
+.show-time-left {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  min-width:52px; max-width:52px;
+  padding:0.3rem 0.25rem;
+  border-right:1px solid var(--border);
+  background:rgba(56,189,248,0.04);
+  gap:0.05rem;
+  flex-shrink:0;
+}
+.st-ini, .st-fin { font-size:0.72rem; font-weight:700; color:var(--text); letter-spacing:-0.01em; line-height:1.2; }
+.st-sep { font-size:0.6rem; color:var(--text2); line-height:1; }
+.show-people { flex:1; }
 .td-entry { padding:0.35rem 0.6rem; position:relative; }
 .td-entry + .td-entry { border-top:1px solid var(--border); }
 .td-subfn { display:inline-block; font-size:0.52rem; font-weight:800; text-transform:uppercase;
   letter-spacing:0.09em; padding:0.08rem 0.3rem; border-radius:3px; margin-bottom:0.18rem; }
-.fn-row-SHOW .td-left { border-left:3px solid var(--fn-aire); }
-.fn-row-SHOW .td-canal { color:var(--fn-aire); }
+.fn-row-SHOW    .td-left { border-left:3px solid var(--fn-aire); }
+.fn-row-SHOW    .td-canal { color:var(--fn-aire); }
+.fn-row-EDICION .td-show-canal { border-left-color:var(--fn-edicion); }
+.fn-row-EDICION .td-show-canal .td-canal-vert { color:var(--fn-edicion); }
+/* Colores de borde izquierdo por sección */
+.fn-left-PLACAS    .td-canal-vert { color:var(--fn-placas); }
+.fn-left-PLACAS    { border-left-color:var(--fn-placas) !important; }
+.fn-left-TEXTOS    .td-canal-vert { color:var(--fn-textos); }
+.fn-left-TEXTOS    { border-left-color:var(--fn-textos) !important; }
+.fn-left-CONTENIDOS .td-canal-vert { color:var(--fn-contenidos); }
+.fn-left-CONTENIDOS { border-left-color:var(--fn-contenidos) !important; }
 
 /* Accent bar per function */
 .fn-row-AIRE       .td-left { border-left:3px solid var(--fn-aire); }
