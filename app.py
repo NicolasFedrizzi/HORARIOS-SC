@@ -2,6 +2,7 @@ from flask import Flask, jsonify, render_template, request, send_file
 from datetime import date, timedelta
 import sqlite3
 import os
+import threading
 import pandas as pd
 from db import get_db, init_db, get_stats
 from gsheets import import_from_gsheets, fetch_semana_csv
@@ -473,6 +474,26 @@ def api_gsheets_sync():
 # ── INIT ───────────────────────────────────────────────────────────────────────
 
 init_db()
+
+def _auto_sync():
+    """Al arrancar, sincroniza semana actual ± 2 desde Google Sheets si no hay datos."""
+    try:
+        db = get_db()
+        count = db.execute("SELECT COUNT(*) FROM turnos").fetchone()[0]
+        db.close()
+        if count > 0:
+            return  # ya hay datos, no hacer nada
+        today = date.today()
+        current_week = today.isocalendar()[1]
+        year = today.year
+        weeks = [w for w in range(current_week - 2, current_week + 3) if 1 <= w <= 52]
+        db = get_db()
+        import_from_gsheets(db, year, weeks)
+        db.close()
+    except Exception:
+        pass
+
+threading.Thread(target=_auto_sync, daemon=True).start()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5050))
