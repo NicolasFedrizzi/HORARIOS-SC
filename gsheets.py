@@ -72,16 +72,20 @@ def parse_semana(year, semana_num, raw_csv):
     df = pd.read_csv(StringIO(raw_csv), header=None, dtype=str).fillna('--')
     rows = df.values.tolist()
 
+    # Auto-detectar offset: algunas pestañas tienen columna vacía/-- al inicio
+    first_row = [str(v).strip() for v in rows[0]] + [''] * 5
+    col_offset = 1 if first_row[0] in ('--', '', 'nan') else 0
+
     current_funcion = 'AIRE'
     current_canal   = 'ESPN'
     turnos = []
 
     for raw_row in rows:
-        # Rellenar a 30 columnas
-        row = [str(v).strip() for v in raw_row] + ['--'] * 30
+        # Rellenar a 35 columnas
+        row = [str(v).strip() for v in raw_row] + ['--'] * 35
 
-        col0 = row[0]
-        col2 = row[2]   # 3er col del día 1 → sirve para detectar ZOCALOS en header
+        col0 = row[col_offset]
+        col2 = row[col_offset + 2]   # sirve para detectar ZOCALOS en header
 
         # ── Saltar filas de encabezado de días ──────────────────────────────
         if col0.upper() in DAY_HEADERS:
@@ -114,7 +118,7 @@ def parse_semana(year, semana_num, raw_csv):
 
         # ── Parsear datos por día ────────────────────────────────────────────
         for di in range(7):
-            off = di * 4
+            off = col_offset + di * 4
             c0 = row[off]       # show time o tipo de tarea
             c1 = row[off + 1]   # turno de trabajo
             c2 = row[off + 2]   # empleado
