@@ -257,48 +257,67 @@ function renderTableView(data) {
       .forEach(function(t) { zocAll.push(Object.assign({}, t, {di: di})); });
   });
 
-  var showSlotMap = new Map();
-  aireAll.concat(zocAll).forEach(function(t) {
-    var k = t.canal + '||' + t.show_inicio + '||' + t.show_fin;
-    if (!showSlotMap.has(k)) showSlotMap.set(k, {canal: t.canal, show_inicio: t.show_inicio, show_fin: t.show_fin});
-  });
+  var CANAL_ORDER = ['ESPN','ESPN 2/ESPN3','CHI','COL','CAM','REGIONES'];
+  function showSortKey(t) {
+    if (!t) return 9999;
+    var h = parseInt((t.split(':'))[0]) || 0;
+    return h < 7 ? h + 24 : h;  // madrugada va al final
+  }
 
-  if (showSlotMap.size > 0) {
-    var CANAL_ORDER = ['ESPN','ESPN 2/ESPN3','CHI','COL','CAM','REGIONES'];
-    function showSortKey(t) {
-      if (!t) return 9999;
-      var h = parseInt((t.split(':'))[0]) || 0;
-      return h < 7 ? h + 24 : h;  // madrugada va al final
-    }
-    var showSlots = Array.from(showSlotMap.values()).sort(function(a, b) {
-      var oa = CANAL_ORDER.indexOf(a.canal); if (oa < 0) oa = 99;
-      var ob = CANAL_ORDER.indexOf(b.canal); if (ob < 0) ob = 99;
-      if (oa !== ob) return oa - ob;
-      return showSortKey(a.show_inicio) - showSortKey(b.show_inicio);
+  var showRows = [];
+  if (aireAll.length > 0 || zocAll.length > 0) {
+    // Group by canal → day → show slot (each day can have different show times)
+    var canalDayMap = new Map();
+    aireAll.concat(zocAll).forEach(function(t) {
+      if (!canalDayMap.has(t.canal)) {
+        canalDayMap.set(t.canal, dias.map(function() { return []; }));
+      }
+      canalDayMap.get(t.canal)[t.di].push(t);
     });
 
-    var showRows = [];
-    var prevCanal = null;
-    showSlots.forEach(function(slot) {
-      var canalBreak = slot.canal !== prevCanal;
-      prevCanal = slot.canal;
-      showRows.push({
-        canal: slot.canal, show_inicio: slot.show_inicio, show_fin: slot.show_fin, canalBreak: canalBreak,
-        perDay: dias.map(function(_, di) {
-          return [
-            { subFn: 'AIRE',    turno: dayTurnos[di].find(function(t) {
-                return t.funcion === 'AIRE' && t.canal === slot.canal &&
-                  t.show_inicio === slot.show_inicio && t.show_fin === slot.show_fin;
-              }) || null },
-            { subFn: 'ZOCALOS', turno: dayTurnos[di].find(function(t) {
-                return t.funcion === 'ZOCALOS' && t.canal === slot.canal &&
-                  t.show_inicio === slot.show_inicio && t.show_fin === slot.show_fin;
-              }) || null },
-          ];
-        }),
+    var canals = Array.from(canalDayMap.keys()).sort(function(a, b) {
+      var oa = CANAL_ORDER.indexOf(a); if (oa < 0) oa = 99;
+      var ob = CANAL_ORDER.indexOf(b); if (ob < 0) ob = 99;
+      return oa - ob;
+    });
+
+    canals.forEach(function(canal) {
+      // Per day: group turnos by show time, sort by show time
+      var daySlots = canalDayMap.get(canal).map(function(turnos) {
+        var slotMap = new Map();
+        turnos.forEach(function(t) {
+          var k = t.show_inicio + '||' + t.show_fin;
+          if (!slotMap.has(k)) slotMap.set(k, {show_inicio: t.show_inicio, show_fin: t.show_fin, aire: null, zocalos: null});
+          var sl = slotMap.get(k);
+          if (t.funcion === 'AIRE') sl.aire = t;
+          else sl.zocalos = t;
+        });
+        return Array.from(slotMap.values()).sort(function(a, b) {
+          return showSortKey(a.show_inicio) - showSortKey(b.show_inicio);
+        });
       });
-    });
 
+      var maxSlots = Math.max.apply(null, daySlots.map(function(d) { return d.length; }).concat([0]));
+      if (maxSlots === 0) return;
+
+      for (var p = 0; p < maxSlots; p++) {
+        (function(pos) {
+          showRows.push({
+            canal: canal,
+            canalBreak: pos === 0,
+            perDay: dias.map(function(_, di) {
+              var sl = daySlots[di][pos] || null;
+              if (!sl) return {showLabel: '', aire: null, zocalos: null};
+              var lbl = sl.show_inicio && sl.show_fin ? sl.show_inicio + ' – ' + sl.show_fin : '';
+              return {showLabel: lbl, aire: sl.aire, zocalos: sl.zocalos};
+            }),
+          });
+        })(p);
+      }
+    });
+  }
+
+  if (showRows.length > 0) {
     sections.push({fn: 'SHOW', rows: showRows, isShow: true});
   }
 
@@ -383,8 +402,7 @@ function renderTableView(data) {
             '<td colspan="' + (1 + dias.length) + '"><span class="canal-hdr-label">' + canalLabel + '</span></td>' +
             '</tr>';
         }
-        // SHOW section: show time en columna izquierda
-        if (showLabel) leftHtml += '<span class="td-show-time">' + showLabel + '</span>';
+        // Left column empty — show times are shown per-day inside each cell
       } else {
         // Other functions: EDICION uses show time label, others use ingreso–egreso
         var leftTop;
@@ -399,24 +417,28 @@ function renderTableView(data) {
       var dayCells = '';
 
       if (sec.isShow) {
-        // Cada celda contiene ambas funciones apiladas
-        row.perDay.forEach(function(entries, di) {
-          var hasAny = entries.some(function(e) { return e.turno; });
+        // Cada celda: show time de ese día + AIRE + ZOCALOS
+        row.perDay.forEach(function(daySlot, di) {
+          var hasAny = daySlot.aire || daySlot.zocalos;
           if (!hasAny) {
             dayCells += '<td class="td-day td-empty">—</td>';
             return;
           }
           var cellHtml = '';
-          entries.forEach(function(entry) {
-            if (!entry.turno) return;
-            var t = entry.turno;
+          if (daySlot.showLabel) {
+            cellHtml += '<div class="td-show-time-cell">' + daySlot.showLabel + '</div>';
+          }
+          ['aire', 'zocalos'].forEach(function(key) {
+            var t = daySlot[key];
+            if (!t) return;
+            var subFn = key === 'aire' ? 'AIRE' : 'ZOCALOS';
             var hrs = timeDiffHours(t.ingreso, t.egreso);
             var extraH = hrs > 8 ? '<span class="td-extra">+' + (hrs-8).toFixed(1) + 'h</span>' : '';
             var parts = t.emp_nombre.trim().split(' ');
             var nameS = parts.length >= 2 ? parts[parts.length-1] + ', ' + parts[0] : t.emp_nombre;
             var shiftS = t.ingreso && t.egreso ? t.ingreso + '–' + t.egreso : '—';
-            cellHtml += '<div class="td-entry sublabel-' + entry.subFn + '">' +
-              '<span class="td-subfn sublabel-' + entry.subFn + '">' + (entry.subFn === 'AIRE' ? 'PROD. AIRE' : 'PROD. ZOCALOS') + '</span>' +
+            cellHtml += '<div class="td-entry sublabel-' + subFn + '">' +
+              '<span class="td-subfn sublabel-' + subFn + '">' + (subFn === 'AIRE' ? 'PROD. AIRE' : 'PROD. ZOCALOS') + '</span>' +
               '<div class="td-name">' + nameS + '</div>' +
               '<div class="td-shift">' + shiftS + extraH + '</div>' +
               '<div class="td-btns">' +
