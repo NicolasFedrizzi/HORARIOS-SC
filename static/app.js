@@ -415,10 +415,8 @@ function renderTableView(data) {
             var parts = t.emp_nombre.trim().split(' ');
             var nameS = parts.length >= 2 ? parts[parts.length-1] + ', ' + parts[0] : t.emp_nombre;
             var shiftS = t.ingreso && t.egreso ? t.ingreso + '–' + t.egreso : '—';
-            var showS = t.show_inicio && t.show_fin ? t.show_inicio + '–' + t.show_fin : '';
             cellHtml += '<div class="td-entry sublabel-' + entry.subFn + '">' +
               '<span class="td-subfn sublabel-' + entry.subFn + '">' + (entry.subFn === 'AIRE' ? 'PROD. AIRE' : 'PROD. ZOCALOS') + '</span>' +
-              (showS ? '<div class="td-show-label">' + showS + '</div>' : '') +
               '<div class="td-name">' + nameS + '</div>' +
               '<div class="td-shift">' + shiftS + extraH + '</div>' +
               '<div class="td-btns">' +
