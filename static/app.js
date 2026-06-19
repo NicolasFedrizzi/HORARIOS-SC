@@ -259,8 +259,8 @@ function renderTableView(data) {
 
   var showSlotMap = new Map();
   aireAll.concat(zocAll).forEach(function(t) {
-    var k = t.canal + '||' + t.show_inicio + '||' + t.show_fin;
-    if (!showSlotMap.has(k)) showSlotMap.set(k, {canal: t.canal, show_inicio: t.show_inicio, show_fin: t.show_fin});
+    var k = t.canal;
+    if (!showSlotMap.has(k)) showSlotMap.set(k, {canal: t.canal});
   });
 
   if (showSlotMap.size > 0) {
@@ -273,8 +273,7 @@ function renderTableView(data) {
     var showSlots = Array.from(showSlotMap.values()).sort(function(a, b) {
       var oa = CANAL_ORDER.indexOf(a.canal); if (oa < 0) oa = 99;
       var ob = CANAL_ORDER.indexOf(b.canal); if (ob < 0) ob = 99;
-      if (oa !== ob) return oa - ob;
-      return showSortKey(a.show_inicio) - showSortKey(b.show_inicio);
+      return oa - ob;
     });
 
     var showRows = [];
@@ -283,18 +282,18 @@ function renderTableView(data) {
       var canalBreak = slot.canal !== prevCanal;
       prevCanal = slot.canal;
       showRows.push({
-        canal: slot.canal, show_inicio: slot.show_inicio, show_fin: slot.show_fin, canalBreak: canalBreak,
-        // perDay: array de [{subFn, turno}] — ambas funciones en la misma celda
+        canal: slot.canal, canalBreak: canalBreak,
+        // perDay: array de [{subFn, turnos[]}] — cada día tiene sus propios shows
         perDay: dias.map(function(_, di) {
+          var aireTurnos = dayTurnos[di].filter(function(t) {
+            return t.funcion === 'AIRE' && t.canal === slot.canal;
+          }).sort(function(a, b) { return showSortKey(a.show_inicio) - showSortKey(b.show_inicio); });
+          var zocTurnos = dayTurnos[di].filter(function(t) {
+            return t.funcion === 'ZOCALOS' && t.canal === slot.canal;
+          }).sort(function(a, b) { return showSortKey(a.show_inicio) - showSortKey(b.show_inicio); });
           return [
-            { subFn: 'AIRE',    turno: dayTurnos[di].find(function(t) {
-                return t.funcion === 'AIRE' && t.canal === slot.canal &&
-                  t.show_inicio === slot.show_inicio && t.show_fin === slot.show_fin;
-              }) || null },
-            { subFn: 'ZOCALOS', turno: dayTurnos[di].find(function(t) {
-                return t.funcion === 'ZOCALOS' && t.canal === slot.canal &&
-                  t.show_inicio === slot.show_inicio && t.show_fin === slot.show_fin;
-              }) || null },
+            { subFn: 'AIRE',    turnos: aireTurnos },
+            { subFn: 'ZOCALOS', turnos: zocTurnos },
           ];
         }),
       });
@@ -384,8 +383,7 @@ function renderTableView(data) {
             '<td colspan="' + (1 + dias.length) + '"><span class="canal-hdr-label">' + canalLabel + '</span></td>' +
             '</tr>';
         }
-        // SHOW section: show time en columna izquierda (canal ya aparece en el header)
-        if (showLabel) leftHtml += '<span class="td-show-time">' + showLabel + '</span>';
+        // SHOW section: canal ya aparece en el header row, columna izquierda vacía
       } else {
         // Other functions: EDICION uses show time label, others use ingreso–egreso
         var leftTop;
@@ -400,31 +398,34 @@ function renderTableView(data) {
       var dayCells = '';
 
       if (sec.isShow) {
-        // Cada celda contiene ambas funciones apiladas
+        // Cada celda contiene ambas funciones apiladas, con horario de show por día
         row.perDay.forEach(function(entries, di) {
-          var hasAny = entries.some(function(e) { return e.turno; });
+          var hasAny = entries.some(function(e) { return e.turnos.length > 0; });
           if (!hasAny) {
             dayCells += '<td class="td-day td-empty">—</td>';
             return;
           }
           var cellHtml = '';
           entries.forEach(function(entry) {
-            if (!entry.turno) return;
-            var t = entry.turno;
-            var hrs = timeDiffHours(t.ingreso, t.egreso);
-            var extraH = hrs > 8 ? '<span class="td-extra">+' + (hrs-8).toFixed(1) + 'h</span>' : '';
-            var parts = t.emp_nombre.trim().split(' ');
-            var nameS = parts.length >= 2 ? parts[parts.length-1] + ', ' + parts[0] : t.emp_nombre;
-            var shiftS = t.ingreso && t.egreso ? t.ingreso + '–' + t.egreso : '—';
-            cellHtml += '<div class="td-entry sublabel-' + entry.subFn + '">' +
-              '<span class="td-subfn sublabel-' + entry.subFn + '">' + (entry.subFn === 'AIRE' ? 'PROD. AIRE' : 'PROD. ZOCALOS') + '</span>' +
-              '<div class="td-name">' + nameS + '</div>' +
-              '<div class="td-shift">' + shiftS + extraH + '</div>' +
-              '<div class="td-btns">' +
-                '<button class="td-btn-e" data-id="' + t.id + '" data-di="' + di + '">✎</button>' +
-                '<button class="td-btn-d" data-id="' + t.id + '">✕</button>' +
-              '</div>' +
-              '</div>';
+            if (!entry.turnos.length) return;
+            entry.turnos.forEach(function(t) {
+              var hrs = timeDiffHours(t.ingreso, t.egreso);
+              var extraH = hrs > 8 ? '<span class="td-extra">+' + (hrs-8).toFixed(1) + 'h</span>' : '';
+              var parts = t.emp_nombre.trim().split(' ');
+              var nameS = parts.length >= 2 ? parts[parts.length-1] + ', ' + parts[0] : t.emp_nombre;
+              var shiftS = t.ingreso && t.egreso ? t.ingreso + '–' + t.egreso : '—';
+              var showS = t.show_inicio && t.show_fin ? t.show_inicio + '–' + t.show_fin : '';
+              cellHtml += '<div class="td-entry sublabel-' + entry.subFn + '">' +
+                '<span class="td-subfn sublabel-' + entry.subFn + '">' + (entry.subFn === 'AIRE' ? 'PROD. AIRE' : 'PROD. ZOCALOS') + '</span>' +
+                (showS ? '<div class="td-show-label">' + showS + '</div>' : '') +
+                '<div class="td-name">' + nameS + '</div>' +
+                '<div class="td-shift">' + shiftS + extraH + '</div>' +
+                '<div class="td-btns">' +
+                  '<button class="td-btn-e" data-id="' + t.id + '" data-di="' + di + '">✎</button>' +
+                  '<button class="td-btn-d" data-id="' + t.id + '">✕</button>' +
+                '</div>' +
+                '</div>';
+            });
           });
           dayCells += '<td class="td-day td-show-cell">' + cellHtml + '</td>';
         });

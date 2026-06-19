@@ -167,6 +167,7 @@ main { max-width:1800px; margin:0 auto; padding:1.25rem 1.5rem; }
 }
 .td-canal { display:block; font-size:0.66rem; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; color:var(--text2); }
 .td-show-time { display:block; font-size:0.95rem; font-weight:700; color:var(--text); margin-top:0.06rem; letter-spacing:-0.01em; }
+.td-show-label { font-size:0.68rem; font-weight:700; color:var(--fn-aire); opacity:0.9; margin-top:0.1rem; margin-bottom:0.05rem; letter-spacing:0.02em; }
 .td-sublabel { font-size:0.58rem; font-weight:800; text-transform:uppercase; letter-spacing:0.1em; margin-top:0.25rem; padding:0.1rem 0.35rem; border-radius:3px; display:inline-block; }
 .sublabel-AIRE    { color:var(--fn-aire);    background:rgba(56,189,248,0.08); }
 .sublabel-ZOCALOS { color:var(--fn-zocalos); background:rgba(52,211,153,0.08); }
