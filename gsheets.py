@@ -1,6 +1,6 @@
 """
 Parser para leer la Google Sheet de horarios.
-Estructura: cada pestaña = SEMANA N (ej: "SEMANA 1", "SEMANA 2"...)
+Estructura: cada pestaña = "HORARIOS SC - SEMANA #N" (ej: "HORARIOS SC - SEMANA #25")
 Cada semana: 7 días × 4 columnas (show, turno, empleado, "--")
 """
 import re
@@ -174,7 +174,7 @@ def parse_semana(year, semana_num, raw_csv):
 
 def fetch_semana_csv(semana_num):
     """Descarga el CSV de una pestaña de la Google Sheet pública."""
-    tab = f'SEMANA {semana_num}'
+    tab = f'HORARIOS SC - SEMANA #{semana_num}'
     url = (
         f'https://docs.google.com/spreadsheets/d/{SHEET_ID}'
         f'/gviz/tq?tqx=out:csv&sheet={requests.utils.quote(tab)}'
