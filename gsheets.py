@@ -9,7 +9,7 @@ import pandas as pd
 from io import StringIO
 from datetime import date, timedelta
 
-SHEET_ID = '117ohb5_Aku95LYRqWGl5cCwZpUcGx45sL8rzl_1Nutg'
+SHEET_ID = '19j3H-fgf6dYwDqHISyjEbejrwg0xivf1'
 
 # Detección de canal a partir del nombre de sección
 CANAL_DETECT = [
@@ -178,7 +178,7 @@ def parse_semana(year, semana_num, raw_csv):
 
 def fetch_semana_csv(semana_num):
     """Descarga el CSV de una pestaña de la Google Sheet pública."""
-    tab = f'HORARIOS SC - SEMANA #{semana_num}'
+    tab = f'HORARIOS SC 2026 - S#{semana_num}'
     url = (
         f'https://docs.google.com/spreadsheets/d/{SHEET_ID}'
         f'/gviz/tq?tqx=out:csv&sheet={requests.utils.quote(tab)}'
