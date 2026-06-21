@@ -481,7 +481,8 @@ def _auto_sync():
         today = date.today()
         current_week = today.isocalendar()[1]
         year = today.year
-        weeks = [w for w in range(current_week - 2, current_week + 3) if 1 <= w <= 52]
+        start = max(30, current_week)
+        weeks = [w for w in range(start, start + 5) if 1 <= w <= 52]
 
         db = get_db()
         weeks_to_sync = []

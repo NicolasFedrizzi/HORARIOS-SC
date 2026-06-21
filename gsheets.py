@@ -129,9 +129,12 @@ def parse_semana(year, semana_num, raw_csv):
 
             c0_up = c0.upper()
 
-            # Detectar función por el valor de c0
-            if c0_up in TASK_TO_FUNCION:
-                fn    = TASK_TO_FUNCION[c0_up]
+            # Detectar función por el valor de c0 (match exacto o prefijo)
+            fn_match = TASK_TO_FUNCION.get(c0_up) or next(
+                (v for k, v in TASK_TO_FUNCION.items() if c0_up.startswith(k)), None
+            )
+            if fn_match:
+                fn    = fn_match
                 canal = ''
                 show_i, show_f = '', ''
                 ingreso, egreso = _parse_time_range(c1)
