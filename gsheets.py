@@ -338,14 +338,16 @@ def import_from_gsheets(db, year, weeks):
     for semana_num in weeks:
         try:
             csv_text = fetch_semana_csv(semana_num)
-            if csv_text is not None:
-                turnos = parse_semana(year, semana_num, csv_text)
-            else:
-                # Fallback: intentar con el sheet alternativo (v2)
+            turnos = parse_semana(year, semana_num, csv_text) if csv_text else []
+
+            # Si el sheet principal devolvió muy pocos turnos (formato incorrecto),
+            # intentar con el sheet alternativo v2
+            if len(turnos) < 10:
                 csv_v2 = fetch_semana_v2_csv()
-                if csv_v2 is None:
-                    continue
-                turnos = parse_semana_v2(year, semana_num, csv_v2)
+                if csv_v2:
+                    turnos_v2 = parse_semana_v2(year, semana_num, csv_v2)
+                    if len(turnos_v2) > len(turnos):
+                        turnos = turnos_v2
         except Exception as e:
             stats['errores'].append(f'SEMANA {semana_num}: {e}')
             continue
