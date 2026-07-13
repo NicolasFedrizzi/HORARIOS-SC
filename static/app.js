@@ -248,13 +248,15 @@ function renderTableView(data) {
   // Armar secciones
   var sections = [];
 
-  // ── SHOW (AIRE + ZOCALOS combinados) ────────────────────────────────────────
-  var aireAll = [], zocAll = [];
+  // ── SHOW (AIRE + ZOCALOS + EDICION-con-show combinados) ─────────────────────
+  var aireAll = [], zocAll = [], edicionShowAll = [];
   dayTurnos.forEach(function(ts, di) {
     ts.filter(function(t) { return t.funcion === 'AIRE'; })
       .forEach(function(t) { aireAll.push(Object.assign({}, t, {di: di})); });
     ts.filter(function(t) { return t.funcion === 'ZOCALOS'; })
       .forEach(function(t) { zocAll.push(Object.assign({}, t, {di: di})); });
+    ts.filter(function(t) { return t.funcion === 'EDICION' && t.show_inicio; })
+      .forEach(function(t) { edicionShowAll.push(Object.assign({}, t, {di: di})); });
   });
 
   var CANAL_ORDER = ['ESPN','ESPN 2/ESPN3','CHI','COL','CAM','REGIONES'];
@@ -265,10 +267,10 @@ function renderTableView(data) {
   }
 
   var showRows = [];
-  if (aireAll.length > 0 || zocAll.length > 0) {
+  if (aireAll.length > 0 || zocAll.length > 0 || edicionShowAll.length > 0) {
     // Group by canal → day → show slot (each day can have different show times)
     var canalDayMap = new Map();
-    aireAll.concat(zocAll).forEach(function(t) {
+    aireAll.concat(zocAll).concat(edicionShowAll).forEach(function(t) {
       if (!canalDayMap.has(t.canal)) {
         canalDayMap.set(t.canal, dias.map(function() { return []; }));
       }
@@ -287,10 +289,11 @@ function renderTableView(data) {
         var slotMap = new Map();
         turnos.forEach(function(t) {
           var k = t.show_inicio + '||' + t.show_fin;
-          if (!slotMap.has(k)) slotMap.set(k, {show_inicio: t.show_inicio, show_fin: t.show_fin, aire: null, zocalos: null});
+          if (!slotMap.has(k)) slotMap.set(k, {show_inicio: t.show_inicio, show_fin: t.show_fin, aire: null, zocalos: null, edicion: null});
           var sl = slotMap.get(k);
           if (t.funcion === 'AIRE') sl.aire = t;
-          else sl.zocalos = t;
+          else if (t.funcion === 'ZOCALOS') sl.zocalos = t;
+          else if (t.funcion === 'EDICION') sl.edicion = t;
         });
         return Array.from(slotMap.values()).sort(function(a, b) {
           return showSortKey(a.show_inicio) - showSortKey(b.show_inicio);
@@ -307,9 +310,9 @@ function renderTableView(data) {
             canalBreak: pos === 0,
             perDay: dias.map(function(_, di) {
               var sl = daySlots[di][pos] || null;
-              if (!sl) return {showLabel: '', aire: null, zocalos: null};
+              if (!sl) return {showLabel: '', aire: null, zocalos: null, edicion: null};
               var lbl = sl.show_inicio && sl.show_fin ? sl.show_inicio + ' – ' + sl.show_fin : '';
-              return {showLabel: lbl, aire: sl.aire, zocalos: sl.zocalos};
+              return {showLabel: lbl, aire: sl.aire, zocalos: sl.zocalos, edicion: sl.edicion};
             }),
           });
         })(p);
@@ -325,8 +328,11 @@ function renderTableView(data) {
   ['EDICION','PLACAS','TEXTOS','CONTENIDOS'].forEach(function(fn) {
     var allFn = [];
     dayTurnos.forEach(function(ts, di) {
-      ts.filter(function(t) { return t.funcion === fn; })
-        .forEach(function(t) { allFn.push(Object.assign({}, t, {di: di})); });
+      ts.filter(function(t) {
+        // EDICION con show_inicio va en la sección SHOW (junto a AIRE/ZOCALOS)
+        if (fn === 'EDICION' && t.show_inicio) return false;
+        return t.funcion === fn;
+      }).forEach(function(t) { allFn.push(Object.assign({}, t, {di: di})); });
     });
     if (!allFn.length) return;
 
@@ -442,23 +448,23 @@ function renderTableView(data) {
       if (sec.isShow) {
         // Cada celda: horario a la izquierda + AIRE + ZOCALOS a la derecha
         row.perDay.forEach(function(daySlot, di) {
-          var hasAny = daySlot.aire || daySlot.zocalos;
+          var hasAny = daySlot.aire || daySlot.zocalos || daySlot.edicion;
           if (!hasAny) {
             dayCells += '<td class="td-day td-empty">—</td>';
             return;
           }
           var peopleHtml = '';
-          ['aire', 'zocalos'].forEach(function(key) {
+          ['aire', 'zocalos', 'edicion'].forEach(function(key) {
             var t = daySlot[key];
             if (!t) return;
-            var subFn = key === 'aire' ? 'AIRE' : 'ZOCALOS';
+            var subFn = key === 'aire' ? 'AIRE' : key === 'zocalos' ? 'ZOCALOS' : 'EDICION';
             var hrs = timeDiffHours(t.ingreso, t.egreso);
             var extraH = hrs > 8 ? '<span class="td-extra">+' + (hrs-8).toFixed(1) + 'h</span>' : '';
             var parts = t.emp_nombre.trim().split(' ');
             var nameS = parts.length >= 2 ? parts[parts.length-1] + ', ' + parts[0] : t.emp_nombre;
             var shiftS = t.ingreso && t.egreso ? t.ingreso + '–' + t.egreso : '—';
             peopleHtml += '<div class="td-entry sublabel-' + subFn + '">' +
-              '<span class="td-subfn sublabel-' + subFn + '">' + (subFn === 'AIRE' ? 'PROD. AIRE' : 'PROD. ZOCALOS') + '</span>' +
+              '<span class="td-subfn sublabel-' + subFn + '">' + (subFn === 'AIRE' ? 'PROD. AIRE' : subFn === 'ZOCALOS' ? 'PROD. ZOCALOS' : 'EDICION') + '</span>' +
               '<div class="td-name">' + nameS + '</div>' +
               '<div class="td-shift">' + shiftS + extraH + '</div>' +
               '<div class="td-btns">' +
