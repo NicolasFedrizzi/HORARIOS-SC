@@ -202,10 +202,17 @@ def fetch_semana_csv(semana_num):
     return r.text
 
 
-def fetch_semana_v2_csv():
-    """Descarga el CSV del sheet alternativo (una sola pestaña, semana 30)."""
-    url = f'https://docs.google.com/spreadsheets/d/{SHEET_ID_V2}/gviz/tq?tqx=out:csv'
-    r = requests.get(url, timeout=15)
+def fetch_semana_v2_csv(semana_num=None):
+    """Descarga el CSV del sheet alternativo. Busca pestaña 'HORARIOS 2026 - SEMANA #N'."""
+    base = f'https://docs.google.com/spreadsheets/d/{SHEET_ID_V2}/gviz/tq?tqx=out:csv'
+    if semana_num is not None:
+        tab = f'HORARIOS 2026 - SEMANA #{semana_num}'
+        url = base + '&sheet=' + requests.utils.quote(tab)
+        r = requests.get(url, timeout=15)
+        if r.status_code == 200 and len(r.text) > 100:
+            return r.text
+    # Fallback: primera pestaña
+    r = requests.get(base, timeout=15)
     if r.status_code != 200 or len(r.text) < 100:
         return None
     return r.text
@@ -343,7 +350,7 @@ def import_from_gsheets(db, year, weeks):
             # Si el sheet principal devolvió muy pocos turnos (formato incorrecto),
             # intentar con el sheet alternativo v2
             if len(turnos) < 10:
-                csv_v2 = fetch_semana_v2_csv()
+                csv_v2 = fetch_semana_v2_csv(semana_num)
                 if csv_v2:
                     turnos_v2 = parse_semana_v2(year, semana_num, csv_v2)
                     if len(turnos_v2) > len(turnos):
