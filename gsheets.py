@@ -9,7 +9,17 @@ import pandas as pd
 from io import StringIO
 from datetime import date, timedelta
 
-SHEET_ID = '19j3H-fgf6dYwDqHISyjEbejrwg0xivf1'
+SHEET_ID    = '19j3H-fgf6dYwDqHISyjEbejrwg0xivf1'
+SHEET_ID_V2 = '1ViiKSaVKdha4c-6Bb9lvfChOz9OltHrc'   # formato alternativo (col1=sección, col2+=datos)
+
+# Canales para el formato v2 (filas intermedias con nombre de canal)
+CANAL_DETECT_V2 = [
+    ('ESPN 2',   'ESPN 2/ESPN3'),
+    ('ESPN CHI', 'CHI'),
+    ('ESPN COL', 'COL'),
+    ('ESPN CAM', 'CAM'),
+    ('ESPN',     'ESPN'),
+]
 
 # Detección de canal a partir del nombre de sección
 CANAL_DETECT = [
@@ -192,6 +202,121 @@ def fetch_semana_csv(semana_num):
     return r.text
 
 
+def fetch_semana_v2_csv():
+    """Descarga el CSV del sheet alternativo (una sola pestaña, semana 30)."""
+    url = f'https://docs.google.com/spreadsheets/d/{SHEET_ID_V2}/gviz/tq?tqx=out:csv'
+    r = requests.get(url, timeout=15)
+    if r.status_code != 200 or len(r.text) < 100:
+        return None
+    return r.text
+
+
+def _detect_canal_v2(text):
+    t = text.strip().upper()
+    for key, val in CANAL_DETECT_V2:
+        if t.startswith(key):
+            return val
+    return None
+
+
+def parse_semana_v2(year, semana_num, raw_csv):
+    """
+    Parser para el formato alternativo donde:
+      col0: vacío | col1: sección (AIRE/EDICION/ZOCALOS) | col2+: datos por día
+    Cada día ocupa 4 columnas: show_time, work_time, empleado, separador.
+    Los canales aparecen como filas intermedias con el nombre del canal en col2.
+    """
+    monday = semana_start_date(year, semana_num)
+    day_dates = [monday + timedelta(days=i) for i in range(7)]
+
+    df = pd.read_csv(StringIO(raw_csv), header=None, dtype=str).fillna('--')
+    rows = df.values.tolist()
+
+    DATA_START = 2
+    DAY_NAMES_UP = {'LUNES', 'MARTES', 'MIERCOLES', 'MIÉRCOLES',
+                    'JUEVES', 'VIERNES', 'SABADO', 'SÁBADO', 'DOMINGO'}
+    SKIP_TASKS = {'SC NEXT', 'TDC', 'NDC', 'TDC', 'NDC'}
+
+    current_funcion = 'AIRE'
+    current_canal   = 'ESPN'
+    turnos = []
+
+    for raw_row in rows:
+        row = [str(v).strip() for v in raw_row] + ['--'] * 40
+        col1    = row[1]
+        col2    = row[2]
+        col1_up = col1.upper()
+        col2_up = col2.upper()
+
+        # Saltar filas de encabezado de días
+        if col2_up.rstrip() in DAY_NAMES_UP:
+            continue
+
+        # Fila de canal: col2 = nombre de canal, col3 vacío/HORARIO/PAUTA
+        canal_det = _detect_canal_v2(col2)
+        if canal_det and row[3].upper() in ('', '--', 'HORARIO', 'PAUTA', 'NAN'):
+            current_canal = canal_det
+            continue
+
+        # Sección: col1 = AIRE / EDICION / ZOCALOS
+        if col1_up in ('AIRE', 'EDICION', 'ZOCALOS'):
+            current_funcion = col1_up
+
+        # Procesar cada día
+        for di in range(7):
+            off = DATA_START + di * 4
+            c0 = row[off]       # show_time o tipo de tarea
+            c1 = row[off + 1]   # work_time
+            c2 = row[off + 2]   # empleado
+
+            if c2 in ('--', '', 'nan') or c2.upper() in ('PAUTA', 'HORARIO'):
+                continue
+
+            c0_up = c0.upper().rstrip()
+
+            if c0_up in SKIP_TASKS:
+                continue
+            elif c0_up.startswith('CONTENIDOS'):
+                fn, canal = 'CONTENIDOS', ''
+                show_i = show_f = ''
+                ingreso, egreso = _parse_time_range(c1)
+            elif c0_up.startswith('PLACAS'):
+                fn, canal = 'PLACAS', ''
+                show_i = show_f = ''
+                ingreso, egreso = _parse_time_range(c1)
+            elif c0_up.startswith('UX'):
+                fn, canal = 'TEXTOS', c0
+                show_i = show_f = ''
+                ingreso, egreso = _parse_time_range(c1)
+            elif re.match(r'^NC\d+', c0_up):
+                fn, canal = 'EDICION', c0
+                show_i = show_f = ''
+                ingreso, egreso = _parse_time_range(c1)
+            elif re.search(r'\d{1,2}:\d{2}', c0):
+                fn    = current_funcion
+                canal = current_canal
+                show_i, show_f = _parse_time_range(c0)
+                ingreso, egreso = _parse_time_range(c1)
+            else:
+                continue
+
+            turnos.append({
+                'fecha':       day_dates[di].isoformat(),
+                'semana':      semana_num,
+                'funcion':     fn,
+                'canal':       canal,
+                'show_inicio': show_i,
+                'show_fin':    show_f,
+                'empleado':    c2.strip(),
+                'ingreso':     ingreso,
+                'egreso':      egreso,
+                'tipo':        'trabajo',
+            })
+
+
+    return turnos
+
+
 def import_from_gsheets(db, year, weeks):
     """
     Importa semanas desde la Google Sheet a la DB.
@@ -213,10 +338,14 @@ def import_from_gsheets(db, year, weeks):
     for semana_num in weeks:
         try:
             csv_text = fetch_semana_csv(semana_num)
-            if csv_text is None:
-                continue   # pestaña no existe o vacía
-
-            turnos = parse_semana(year, semana_num, csv_text)
+            if csv_text is not None:
+                turnos = parse_semana(year, semana_num, csv_text)
+            else:
+                # Fallback: intentar con el sheet alternativo (v2)
+                csv_v2 = fetch_semana_v2_csv()
+                if csv_v2 is None:
+                    continue
+                turnos = parse_semana_v2(year, semana_num, csv_v2)
         except Exception as e:
             stats['errores'].append(f'SEMANA {semana_num}: {e}')
             continue
