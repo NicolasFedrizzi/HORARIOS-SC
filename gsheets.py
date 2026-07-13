@@ -244,8 +244,9 @@ def parse_semana_v2(year, semana_num, raw_csv):
                     'JUEVES', 'VIERNES', 'SABADO', 'SÁBADO', 'DOMINGO'}
     SKIP_TASKS = {'SC NEXT', 'TDC', 'NDC', 'TDC', 'NDC'}
 
-    current_funcion = 'AIRE'
-    current_canal   = 'ESPN'
+    current_funcion  = 'AIRE'
+    current_canal    = 'ESPN'
+    current_task_fn  = None   # función activa para secciones tipo PLACAS (tarea en col1)
     turnos = []
 
     for raw_row in rows:
@@ -263,11 +264,16 @@ def parse_semana_v2(year, semana_num, raw_csv):
         canal_det = _detect_canal_v2(col2)
         if canal_det and row[3].upper() in ('', '--', 'HORARIO', 'PAUTA', 'NAN'):
             current_canal = canal_det
+            current_task_fn = None
             continue
 
-        # Sección: col1 = AIRE / EDICION / ZOCALOS
+        # Sección: col1 = AIRE / EDICION / ZOCALOS → resetea contexto de tarea
         if col1_up in ('AIRE', 'EDICION', 'ZOCALOS'):
             current_funcion = col1_up
+            current_task_fn = None
+        # Tarea de sección: col1 = PLACAS / TEXTOS / CONTENIDOS (identificador en col1, no col2)
+        elif col1_up in TASK_TO_FUNCION:
+            current_task_fn = TASK_TO_FUNCION[col1_up]
 
         # Procesar cada día
         for di in range(7):
@@ -303,6 +309,13 @@ def parse_semana_v2(year, semana_num, raw_csv):
                 fn    = current_funcion
                 canal = current_canal
                 show_i, show_f = _parse_time_range(c0)
+                ingreso, egreso = _parse_time_range(c1)
+            elif c0 in ('--', '', 'nan') and current_task_fn and re.search(r'\d{1,2}:\d{2}', c1):
+                # Fila de continuación: c0 vacío, c1=work_time, c2=empleado.
+                # Ocurre en PLACAS donde el identificador está en col1 de la fila
+                # y las filas de continuación no repiten el identificador en c0.
+                fn, canal = current_task_fn, ''
+                show_i = show_f = ''
                 ingreso, egreso = _parse_time_range(c1)
             else:
                 continue
