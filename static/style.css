@@ -197,6 +197,11 @@ tr.canal-break .td-show-canal { border-top: none !important; }
   white-space:nowrap;
 }
 
+/* Línea divisoria entre shows del mismo canal */
+.fn-row-SHOW:not(.canal-break) .td-day {
+  border-top: 2px solid var(--border2);
+}
+
 /* Show cell: horario izquierda + AIRE/ZOCALOS derecha */
 .td-show-cell { vertical-align:top; padding:0; }
 .show-cell-inner { display:flex; align-items:stretch; height:100%; }
