@@ -287,10 +287,14 @@ def parse_semana_v2(year, semana_num, raw_csv):
         elif col1_up in TASK_TO_FUNCION:
             current_task_fn = TASK_TO_FUNCION[col1_up]
             current_absence_fn = None
-        # Sección de ausencia: col1 = OFF / COMPENSATORIOS / VACACIONES
-        elif col1_up in ABSENCE_SECTIONS:
-            current_absence_fn = ABSENCE_SECTIONS[col1_up]
+
+        # Sección de ausencia: identificador en c0 del primer día (no en col1)
+        # Ej: row[DATA_START] = 'OFF' / 'COMPENSATORIO' / 'VACACIONES'
+        c0_day0 = row[DATA_START].strip().upper()
+        if c0_day0 in ABSENCE_SECTIONS:
+            current_absence_fn = ABSENCE_SECTIONS[c0_day0]
             current_task_fn = None
+            continue  # fila de encabezado: sin empleados, solo marca de sección
 
         # Procesar cada día
         for di in range(7):
