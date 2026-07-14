@@ -426,6 +426,8 @@ function renderTableView(data) {
         if (row.canalBreak) {
           var rs = showCanalRowspans[row.canal] || 1;
           var canalLabel = CANAL_LABELS[row.canal] || row.canal || '';
+          // Fila separadora con el nombre del canal
+          html += '<tr class="canal-hdr-row"><td colspan="' + (1 + dias.length) + '"><span class="canal-hdr-label">' + canalLabel + '</span></td></tr>';
           leftCell = '<td class="td-left td-show-canal" rowspan="' + rs + '"><span class="td-canal-vert">' + canalLabel + '</span></td>';
         }
         // filas siguientes del mismo canal: sin td-left (ya cubre el rowspan)

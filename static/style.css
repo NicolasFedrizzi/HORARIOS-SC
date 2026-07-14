@@ -114,28 +114,24 @@ main { max-width:1800px; margin:0 auto; padding:1.25rem 1.5rem; }
 
 /* Canal group header rows */
 .canal-hdr-row td {
-  padding: 0.5rem 1rem 0.2rem;
+  padding: 0.35rem 1rem 0.2rem;
   border: none;
-  border-top: 1px solid rgba(255,255,255,0.12);
+  border-top: 2px solid rgba(255,255,255,0.08);
   background: var(--bg);
 }
 .canal-hdr-label {
-  font-size: 0.72rem;
+  font-size: 0.65rem;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   color: var(--fn-aire);
-  opacity: 0.85;
+  opacity: 0.7;
 }
 
-/* Línea divisoria entre canales en la sección SHOW */
-tr.canal-break td {
-  border-top: 3px solid var(--fn-aire) !important;
-}
+/* Línea divisoria entre canales en la sección SHOW — ahora la maneja canal-hdr-row */
+tr.canal-break td { border-top: none !important; }
 tr.canal-break .td-left,
-tr.canal-break .td-show-canal {
-  border-top: 3px solid var(--fn-aire) !important;
-}
+tr.canal-break .td-show-canal { border-top: none !important; }
 
 /* Section header rows */
 .section-hdr td {
