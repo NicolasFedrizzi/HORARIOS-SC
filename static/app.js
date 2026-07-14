@@ -18,7 +18,8 @@ const S = {
   turnoFecha: null,
   compEmpId: null,
   weekFilter: '',
-  viewMode: 'tabla',  // 'tabla' | 'cards'
+  viewMode: 'tabla',  // 'tabla' | 'cards' | 'dia'
+  currentDayIdx: 0,
   dayRange: 'week',   // 'week' (L-V) | 'weekend' (S-D)
 };
 
@@ -217,13 +218,16 @@ function makeTurnoCard(t, day) {
 }
 
 function renderSchedule(data) {
-  el('schedule-grid').classList.toggle('hidden', S.viewMode === 'tabla');
-  el('schedule-table-wrap').classList.toggle('hidden', S.viewMode === 'cards');
+  el('schedule-grid').classList.toggle('hidden', S.viewMode !== 'cards');
+  el('schedule-table-wrap').classList.toggle('hidden', S.viewMode !== 'tabla');
+  el('schedule-day-wrap').classList.toggle('hidden', S.viewMode !== 'dia');
 
   if (S.viewMode === 'tabla') {
     renderTableView(data);
-  } else {
+  } else if (S.viewMode === 'cards') {
     renderCardsView(data);
+  } else {
+    renderDayView(data);
   }
 }
 
@@ -621,6 +625,174 @@ function renderCardsView(data) {
     grid.appendChild(col);
   });
 }  // end renderCardsView
+
+// ─── DAY VIEW ────────────────────────────────────────────────────────────────
+function renderDayView(data) {
+  const wrap = el('schedule-day-wrap');
+  const dias = data.dias;
+  const filter = S.weekFilter;
+
+  const DN_SHORT = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+  var idx = Math.min(S.currentDayIdx, dias.length - 1);
+
+  // Tabs de días
+  var tabsHtml = '<div class="dv-tabs">';
+  dias.forEach(function(d, i) {
+    var active = i === idx ? ' active' : '';
+    tabsHtml += '<button class="dv-tab' + active + '" data-i="' + i + '">' +
+      '<span class="dv-tab-name">' + DN_SHORT[i] + '</span>' +
+      '<span class="dv-tab-num">' + String(d.dia_num).padStart(2,'0') + '/' + String(d.mes).padStart(2,'0') + '</span>' +
+      (d.es_feriado ? '<span class="dv-tab-fer">FER</span>' : '') +
+      '</button>';
+  });
+  tabsHtml += '</div>';
+
+  // Contenido del día seleccionado
+  var day = dias[idx];
+  var turnos = day.turnos;
+  if (filter) turnos = turnos.filter(function(t) { return t.emp_nombre.toLowerCase().includes(filter); });
+
+  var CANAL_LABELS = {'ESPN':'ESPN','ESPN 2/ESPN3':'ESPN 2','CHI':'ESPN CHI','COL':'ESPN COL','CAM':'ESPN CAM'};
+  var CANAL_ORDER  = ['ESPN','ESPN 2/ESPN3','CHI','COL','CAM'];
+
+  // Agrupar shows por canal
+  var showMap = {};
+  turnos.forEach(function(t) {
+    if (!t.show_inicio) return;
+    if (!['AIRE','ZOCALOS','EDICION'].includes(t.funcion)) return;
+    var c = t.canal || '';
+    if (!showMap[c]) showMap[c] = {};
+    var k = t.show_inicio + '||' + t.show_fin;
+    if (!showMap[c][k]) showMap[c][k] = {show_inicio: t.show_inicio, show_fin: t.show_fin, turnos: []};
+    showMap[c][k].turnos.push(t);
+  });
+
+  var FN_COLORS = {AIRE:'var(--fn-aire)',ZOCALOS:'var(--fn-zocalos)',EDICION:'var(--fn-edicion)'};
+  var FN_LABELS = {AIRE:'PROD. AIRE',ZOCALOS:'PROD. ZOCALOS',EDICION:'EDICION'};
+
+  var contentHtml = '<div class="dv-content">';
+
+  // Sección SHOWS por canal
+  var canalesConShows = CANAL_ORDER.filter(function(c) { return showMap[c] && Object.keys(showMap[c]).length; });
+  canalesConShows.forEach(function(canal) {
+    var label = CANAL_LABELS[canal] || canal;
+    contentHtml += '<div class="dv-canal-hdr">' + label + '</div>';
+    var shows = Object.values(showMap[canal]).sort(function(a,b) {
+      return showSortKey(a.show_inicio) - showSortKey(b.show_inicio);
+    });
+    shows.forEach(function(show) {
+      contentHtml += '<div class="dv-show-row">';
+      contentHtml += '<div class="dv-show-time">' + show.show_inicio + '<span class="dv-sep">–</span>' + show.show_fin + '</div>';
+      contentHtml += '<div class="dv-show-people">';
+      show.turnos.forEach(function(t) {
+        var color = FN_COLORS[t.funcion] || 'var(--text2)';
+        var lbl = FN_LABELS[t.funcion] || t.funcion;
+        var hrs = timeDiffHours(t.ingreso, t.egreso);
+        var extra = hrs > 8 ? '<span class="td-extra">+' + (hrs-8).toFixed(1) + 'h</span>' : '';
+        contentHtml += '<div class="dv-person" style="border-left-color:' + color + '">' +
+          '<span class="dv-fn" style="color:' + color + '">' + lbl + '</span>' +
+          '<span class="dv-name">' + t.emp_nombre + '</span>' +
+          '<span class="dv-shift">' + (t.ingreso && t.egreso ? t.ingreso + '–' + t.egreso : '—') + extra + '</span>' +
+          '<div class="dv-btns">' +
+            '<button class="td-btn-e" data-id="' + t.id + '" data-di="' + idx + '">✎</button>' +
+            '<button class="td-btn-d" data-id="' + t.id + '">✕</button>' +
+          '</div>' +
+          '</div>';
+      });
+      contentHtml += '</div></div>';
+    });
+  });
+
+  // Secciones de tareas: PLACAS, TEXTOS, CONTENIDOS, EDICION sin show
+  var TASK_SECTIONS = ['PLACAS','TEXTOS','CONTENIDOS','EDICION'];
+  TASK_SECTIONS.forEach(function(fn) {
+    var ts = turnos.filter(function(t) {
+      if (t.funcion !== fn) return false;
+      if (fn === 'EDICION' && t.show_inicio) return false;
+      return true;
+    });
+    if (!ts.length) return;
+
+    var color = 'var(--fn-' + fn.toLowerCase() + ')';
+    contentHtml += '<div class="dv-canal-hdr" style="color:' + color + ';border-left-color:' + color + '">' + fn + '</div>';
+
+    // Agrupar por ingreso-egreso
+    var slotMap = {};
+    ts.forEach(function(t) {
+      var k = (t.canal || '') + '||' + t.ingreso + '||' + t.egreso;
+      if (!slotMap[k]) slotMap[k] = {ingreso:t.ingreso, egreso:t.egreso, canal:t.canal, turnos:[]};
+      slotMap[k].turnos.push(t);
+    });
+    Object.values(slotMap).sort(function(a,b) {
+      var ha = parseInt((a.ingreso||'0').split(':')[0]) || 0;
+      var hb = parseInt((b.ingreso||'0').split(':')[0]) || 0;
+      return ha - hb;
+    }).forEach(function(slot) {
+      contentHtml += '<div class="dv-show-row">';
+      contentHtml += '<div class="dv-show-time">' + (slot.ingreso||'—') + '<span class="dv-sep">–</span>' + (slot.egreso||'—') + '</div>';
+      contentHtml += '<div class="dv-show-people">';
+      slot.turnos.forEach(function(t) {
+        var lbl = t.canal || fn;
+        contentHtml += '<div class="dv-person" style="border-left-color:' + color + '">' +
+          '<span class="dv-fn" style="color:' + color + '">' + lbl + '</span>' +
+          '<span class="dv-name">' + t.emp_nombre + '</span>' +
+          '<span class="dv-shift">' + (t.ingreso && t.egreso ? t.ingreso + '–' + t.egreso : '—') + '</span>' +
+          '<div class="dv-btns">' +
+            '<button class="td-btn-e" data-id="' + t.id + '" data-di="' + idx + '">✎</button>' +
+            '<button class="td-btn-d" data-id="' + t.id + '">✕</button>' +
+          '</div>' +
+          '</div>';
+      });
+      contentHtml += '</div></div>';
+    });
+  });
+
+  // Libres
+  var libres = turnos.filter(function(t) { return t.tipo === 'libre'; });
+  if (libres.length) {
+    contentHtml += '<div class="dv-canal-hdr" style="color:var(--text2);border-left-color:var(--text2)">LIBRE</div>';
+    libres.forEach(function(t) {
+      contentHtml += '<div class="dv-show-row"><div class="dv-show-time"></div><div class="dv-show-people">' +
+        '<div class="dv-person" style="border-left-color:var(--text2)">' +
+        '<span class="dv-name">' + t.emp_nombre + '</span>' +
+        '</div></div></div>';
+    });
+  }
+
+  if (!turnos.length) {
+    contentHtml += '<div style="padding:2rem;text-align:center;color:var(--text2);font-size:0.85rem">Sin turnos este día</div>';
+  }
+
+  contentHtml += '<div style="margin-top:1rem"><button class="add-btn" id="dv-add-btn">+ turno</button></div>';
+  contentHtml += '</div>';
+
+  wrap.innerHTML = tabsHtml + contentHtml;
+
+  // Eventos tabs
+  wrap.querySelectorAll('.dv-tab').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      S.currentDayIdx = parseInt(btn.dataset.i);
+      renderDayView(data);
+    });
+  });
+
+  // Eventos edit/delete
+  wrap.querySelectorAll('.td-btn-d').forEach(function(btn) {
+    btn.addEventListener('click', async function(e) {
+      e.stopPropagation();
+      if (confirm('¿Eliminar turno?')) { await api('/api/turnos/' + btn.dataset.id, 'DELETE'); loadWeek(); }
+    });
+  });
+  wrap.querySelectorAll('.td-btn-e').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var t = data.dias[idx].turnos.find(function(x) { return x.id === parseInt(btn.dataset.id); });
+      if (t) openTurnoModal(data.dias[idx].fecha, t);
+    });
+  });
+  var addBtn = wrap.querySelector('#dv-add-btn');
+  if (addBtn) addBtn.addEventListener('click', function() { openTurnoModal(day.fecha); });
+}
 
 // ─── TURNO MODAL ──────────────────────────────────────────────────────────────
 el('btn-add-turno').addEventListener('click', () => openTurnoModal(S.weekData?.dias?.[0]?.fecha || ''));

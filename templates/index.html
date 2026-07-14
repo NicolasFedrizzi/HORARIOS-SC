@@ -43,6 +43,7 @@
       <div class="view-toggle">
         <button class="view-toggle-btn active" data-mode="tabla" title="Vista tabla">⊞</button>
         <button class="view-toggle-btn" data-mode="cards" title="Vista tarjetas">▦</button>
+        <button class="view-toggle-btn" data-mode="dia" title="Vista por día">☰</button>
       </div>
       <button class="btn btn-ghost btn-sm" id="btn-excel-upload" title="Importar Excel">↑ Excel</button>
       <button class="btn btn-ghost btn-sm" id="btn-repetir" title="Copiar todos los turnos a la semana siguiente">↻ Repetir</button>
@@ -55,6 +56,7 @@
   <div id="schedule-container">
     <div class="schedule-grid hidden" id="schedule-grid"></div>
     <div id="schedule-table-wrap"><div class="loading">Cargando...</div></div>
+    <div id="schedule-day-wrap" class="hidden"></div>
   </div>
 </section>
 
