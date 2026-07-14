@@ -462,8 +462,7 @@ function renderTableView(data) {
             var subFn = key === 'aire' ? 'AIRE' : key === 'zocalos' ? 'ZOCALOS' : 'EDICION';
             var hrs = timeDiffHours(t.ingreso, t.egreso);
             var extraH = hrs > 8 ? '<span class="td-extra">+' + (hrs-8).toFixed(1) + 'h</span>' : '';
-            var parts = t.emp_nombre.trim().split(' ');
-            var nameS = parts.length >= 2 ? parts[parts.length-1] + ', ' + parts[0] : t.emp_nombre;
+            var nameS = t.emp_nombre.trim();
             var shiftS = t.ingreso && t.egreso ? t.ingreso + '–' + t.egreso : '—';
             peopleHtml += '<div class="td-entry sublabel-' + subFn + '">' +
               '<span class="td-subfn sublabel-' + subFn + '">' + (subFn === 'AIRE' ? 'PROD. AIRE' : subFn === 'ZOCALOS' ? 'PROD. ZOCALOS' : 'EDICION') + '</span>' +
@@ -489,8 +488,7 @@ function renderTableView(data) {
           turnos.forEach(function(t) {
             var hrs = timeDiffHours(t.ingreso, t.egreso);
             var extraH = hrs > 8 ? '<span class="td-extra">+' + (hrs-8).toFixed(1) + 'h</span>' : '';
-            var parts = t.emp_nombre.trim().split(' ');
-            var nameS = parts.length >= 2 ? parts[parts.length-1] + ', ' + parts[0] : t.emp_nombre;
+            var nameS = t.emp_nombre.trim();
             var shiftS = t.ingreso && t.egreso ? t.ingreso + '–' + t.egreso : '—';
             cellHtml += '<div class="td-entry">' +
               '<div class="td-name">' + nameS + '</div>' +
