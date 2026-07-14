@@ -17,12 +17,15 @@
   --purple:  #8b5cf6;
   --radius:  8px;
   --shadow:  0 8px 32px rgba(0,0,0,0.5);
-  --fn-aire:       #38bdf8;
-  --fn-edicion:    #a78bfa;
-  --fn-zocalos:    #34d399;
-  --fn-placas:     #fb923c;
-  --fn-textos:     #f472b6;
-  --fn-contenidos: #fbbf24;
+  --fn-aire:           #38bdf8;
+  --fn-edicion:        #a78bfa;
+  --fn-zocalos:        #34d399;
+  --fn-placas:         #fb923c;
+  --fn-textos:         #f472b6;
+  --fn-contenidos:     #fbbf24;
+  --fn-off:            #ef4444;
+  --fn-compensatorio:  #f59e0b;
+  --fn-vacacion:       #10b981;
 }
 
 body { font-family: 'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
@@ -233,6 +236,13 @@ tr.canal-break .td-show-canal { border-top: none !important; }
 .fn-left-TEXTOS    { border-left-color:var(--fn-textos) !important; }
 .fn-left-CONTENIDOS .td-canal-vert { color:var(--fn-contenidos); }
 .fn-left-CONTENIDOS { border-left-color:var(--fn-contenidos) !important; }
+.fn-left-OFF         .td-canal-vert { color:var(--fn-off); }
+.fn-left-OFF         { border-left-color:var(--fn-off) !important; }
+.fn-left-COMPENSATORIO .td-canal-vert { color:var(--fn-compensatorio); }
+.fn-left-COMPENSATORIO { border-left-color:var(--fn-compensatorio) !important; }
+.fn-left-VACACION    .td-canal-vert { color:var(--fn-vacacion); }
+.fn-left-VACACION    { border-left-color:var(--fn-vacacion) !important; }
+.absence-name { font-size:0.82rem; color:var(--text2); }
 
 /* Accent bar per function */
 .fn-row-AIRE       .td-left { border-left:3px solid var(--fn-aire); }

@@ -39,6 +39,15 @@ TASK_TO_FUNCION = {
     'ZOCALOS':   'ZOCALOS',
 }
 
+# Secciones de ausencia (tipo='libre')
+ABSENCE_SECTIONS = {
+    'OFF':           'OFF',
+    'COMPENSATORIOS':'COMPENSATORIO',
+    'COMPENSATORIO': 'COMPENSATORIO',
+    'VACACIONES':    'VACACION',
+    'VACACION':      'VACACION',
+}
+
 DAY_HEADERS = {
     'LUNES','MARTES','MIERCOLES','MIÉRCOLES',
     'JUEVES','VIERNES','SABADO','SÁBADO','DOMINGO',
@@ -244,9 +253,10 @@ def parse_semana_v2(year, semana_num, raw_csv):
                     'JUEVES', 'VIERNES', 'SABADO', 'SÁBADO', 'DOMINGO'}
     SKIP_TASKS = {'SC NEXT', 'TDC', 'NDC', 'TDC', 'NDC'}
 
-    current_funcion  = 'AIRE'
-    current_canal    = 'ESPN'
-    current_task_fn  = None   # función activa para secciones tipo PLACAS (tarea en col1)
+    current_funcion   = 'AIRE'
+    current_canal     = 'ESPN'
+    current_task_fn   = None   # función activa para secciones tipo PLACAS (tarea en col1)
+    current_absence_fn = None  # sección de ausencia activa (OFF/COMPENSATORIO/VACACION)
     turnos = []
 
     for raw_row in rows:
@@ -265,15 +275,22 @@ def parse_semana_v2(year, semana_num, raw_csv):
         if canal_det and row[3].upper() in ('', '--', 'HORARIO', 'PAUTA', 'NAN'):
             current_canal = canal_det
             current_task_fn = None
+            current_absence_fn = None
             continue
 
         # Sección: col1 = AIRE / EDICION / ZOCALOS → resetea contexto de tarea
         if col1_up in ('AIRE', 'EDICION', 'ZOCALOS'):
             current_funcion = col1_up
             current_task_fn = None
+            current_absence_fn = None
         # Tarea de sección: col1 = PLACAS / TEXTOS / CONTENIDOS (identificador en col1, no col2)
         elif col1_up in TASK_TO_FUNCION:
             current_task_fn = TASK_TO_FUNCION[col1_up]
+            current_absence_fn = None
+        # Sección de ausencia: col1 = OFF / COMPENSATORIOS / VACACIONES
+        elif col1_up in ABSENCE_SECTIONS:
+            current_absence_fn = ABSENCE_SECTIONS[col1_up]
+            current_task_fn = None
 
         # Procesar cada día
         for di in range(7):
@@ -317,6 +334,22 @@ def parse_semana_v2(year, semana_num, raw_csv):
                 fn, canal = current_task_fn, ''
                 show_i = show_f = ''
                 ingreso, egreso = _parse_time_range(c1)
+            elif current_absence_fn:
+                # Fila de ausencia (OFF / COMPENSATORIO / VACACION): solo nombre, sin horario
+                ingreso, egreso = _parse_time_range(c1) if c1 not in ('--', '', 'nan') else ('', '')
+                turnos.append({
+                    'fecha':       day_dates[di].isoformat(),
+                    'semana':      semana_num,
+                    'funcion':     current_absence_fn,
+                    'canal':       '',
+                    'show_inicio': '',
+                    'show_fin':    '',
+                    'empleado':    c2.strip(),
+                    'ingreso':     ingreso,
+                    'egreso':      egreso,
+                    'tipo':        'libre',
+                })
+                continue
             else:
                 continue
 

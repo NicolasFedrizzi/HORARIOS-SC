@@ -382,6 +382,18 @@ function renderTableView(data) {
     sections.push({fn: fn, rows: rows});
   });
 
+  // ── Secciones de ausencia (OFF, COMPENSATORIO, VACACION) ─────────────────
+  ['OFF','COMPENSATORIO','VACACION'].forEach(function(fn) {
+    var perDay = dias.map(function(d) {
+      var ts = d.turnos.filter(function(t) { return t.tipo === 'libre' && t.funcion === fn; });
+      if (filter) ts = ts.filter(function(t) { return t.emp_nombre.toLowerCase().includes(filter); });
+      return ts;
+    });
+    if (perDay.some(function(ts) { return ts.length > 0; })) {
+      sections.push({fn: fn, rows: [{canalBreak: true, perDay: perDay}], isAbsence: true});
+    }
+  });
+
   // Header
   var thDays = '';
   dias.forEach(function(d, i) {
@@ -444,6 +456,11 @@ function renderTableView(data) {
           leftCell = '<td class="td-left td-show-canal" rowspan="' + rs + '"><span class="td-canal-vert">' + (row.canal || '') + '</span></td>';
         }
         // rows siguientes del mismo canal: sin td-left (cubierto por rowspan)
+      } else if (sec.isAbsence) {
+        if (row.canalBreak) {
+          var ABSENCE_LABELS = {OFF:'OFF', COMPENSATORIO:'COMP.', VACACION:'VAC.'};
+          leftCell = '<td class="td-left td-show-canal fn-left-' + fn + '" rowspan="1"><span class="td-canal-vert">' + (ABSENCE_LABELS[fn]||fn) + '</span></td>';
+        }
       } else {
         // PLACAS, TEXTOS, CONTENIDOS: label de sección en primera fila
         if (row.canalBreak) {
@@ -484,6 +501,14 @@ function renderTableView(data) {
           var timeParts = daySlot.showLabel ? daySlot.showLabel.split(' – ') : ['', ''];
           var timeHtml = '<div class="show-time-left"><span class="st-ini">' + (timeParts[0]||'') + '</span><span class="st-sep">–</span><span class="st-fin">' + (timeParts[1]||'') + '</span></div>';
           dayCells += '<td class="td-day td-show-cell"><div class="show-cell-inner">' + timeHtml + '<div class="show-people">' + peopleHtml + '</div></div></td>';
+        });
+      } else if (sec.isAbsence) {
+        row.perDay.forEach(function(ts) {
+          if (!ts.length) { dayCells += '<td class="td-day td-empty">—</td>'; return; }
+          var cellHtml = ts.map(function(t) {
+            return '<div class="td-entry"><div class="td-name absence-name">' + t.emp_nombre.trim() + '</div></div>';
+          }).join('');
+          dayCells += '<td class="td-day">' + cellHtml + '</td>';
         });
       } else {
         row.perDay.forEach(function(turnos, di) {
@@ -747,16 +772,33 @@ function renderDayView(data) {
     });
   });
 
-  // Libres
-  var libres = turnos.filter(function(t) { return t.tipo === 'libre'; });
-  if (libres.length) {
-    contentHtml += '<div class="dv-canal-hdr" style="color:var(--text2);border-left-color:var(--text2)">LIBRE</div>';
-    libres.forEach(function(t) {
-      contentHtml += '<div class="dv-show-row"><div class="dv-show-time"></div><div class="dv-show-people">' +
-        '<div class="dv-person" style="border-left-color:var(--text2)">' +
+  // Secciones de ausencia
+  var ABSENCE_COLORS = {OFF:'var(--fn-off)', COMPENSATORIO:'var(--fn-compensatorio)', VACACION:'var(--fn-vacacion)'};
+  var ABSENCE_LABELS_DV = {OFF:'OFF / Franco', COMPENSATORIO:'Compensatorio', VACACION:'Vacaciones'};
+  ['OFF','COMPENSATORIO','VACACION'].forEach(function(fn) {
+    var abs = turnos.filter(function(t) { return t.tipo === 'libre' && t.funcion === fn; });
+    if (!abs.length) return;
+    var color = ABSENCE_COLORS[fn];
+    contentHtml += '<div class="dv-canal-hdr" style="color:' + color + ';border-left-color:' + color + '">' + ABSENCE_LABELS_DV[fn] + '</div>';
+    contentHtml += '<div class="dv-show-row"><div class="dv-show-time"></div><div class="dv-show-people">';
+    abs.forEach(function(t) {
+      contentHtml += '<div class="dv-person" style="border-left-color:' + color + '">' +
         '<span class="dv-name">' + t.emp_nombre + '</span>' +
-        '</div></div></div>';
+        '</div>';
     });
+    contentHtml += '</div></div>';
+  });
+  // Libres sin categoría (tipo='libre' y funcion no reconocida)
+  var libresOtros = turnos.filter(function(t) {
+    return t.tipo === 'libre' && !ABSENCE_COLORS[t.funcion];
+  });
+  if (libresOtros.length) {
+    contentHtml += '<div class="dv-canal-hdr" style="color:var(--text2);border-left-color:var(--text2)">LIBRE</div>';
+    contentHtml += '<div class="dv-show-row"><div class="dv-show-time"></div><div class="dv-show-people">';
+    libresOtros.forEach(function(t) {
+      contentHtml += '<div class="dv-person" style="border-left-color:var(--text2)"><span class="dv-name">' + t.emp_nombre + '</span></div>';
+    });
+    contentHtml += '</div></div>';
   }
 
   if (!turnos.length) {
