@@ -198,8 +198,9 @@ tr.canal-break .td-show-canal { border-top: none !important; }
 }
 
 /* Línea divisoria entre shows del mismo canal */
-.fn-row-SHOW:not(.canal-break) .td-day {
-  border-top: 2px solid var(--border2);
+.fn-row-SHOW:not(.canal-break) .td-day,
+.fn-row-SHOW:not(.canal-break) .td-show-cell {
+  border-top: 2px solid rgba(255,255,255,0.13) !important;
 }
 
 /* Show cell: horario izquierda + AIRE/ZOCALOS derecha */
