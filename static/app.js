@@ -351,7 +351,10 @@ function renderTableView(data) {
         if (cc !== 0) return cc;
         return (a.show_inicio || 'ZZ').localeCompare(b.show_inicio || 'ZZ');
       }
-      return showSortKey(a.ingreso) - showSortKey(b.ingreso);
+      // Turnos de trabajo: orden cronológico simple (06:00 va primero, no al final)
+      var ha = parseInt((a.ingreso||'0').split(':')[0]) || 0;
+      var hb = parseInt((b.ingreso||'0').split(':')[0]) || 0;
+      return ha - hb;
     });
 
     var rows = slots.map(function(slot, i) {
