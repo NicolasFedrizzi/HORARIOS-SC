@@ -382,8 +382,8 @@ function renderTableView(data) {
     sections.push({fn: fn, rows: rows});
   });
 
-  // ── Secciones de ausencia (OFF, COMPENSATORIO, VACACION) ─────────────────
-  ['OFF','COMPENSATORIO','VACACION'].forEach(function(fn) {
+  // ── Secciones de ausencia ─────────────────────────────────────────────────
+  ['FRANCO','OFF','COMPENSATORIO','VACACION'].forEach(function(fn) {
     var perDay = dias.map(function(d) {
       var ts = d.turnos.filter(function(t) { return t.tipo === 'libre' && t.funcion === fn; });
       if (filter) ts = ts.filter(function(t) { return t.emp_nombre.toLowerCase().includes(filter); });
@@ -458,7 +458,7 @@ function renderTableView(data) {
         // rows siguientes del mismo canal: sin td-left (cubierto por rowspan)
       } else if (sec.isAbsence) {
         if (row.canalBreak) {
-          var ABSENCE_LABELS = {OFF:'OFF', COMPENSATORIO:'COMP.', VACACION:'VAC.'};
+          var ABSENCE_LABELS = {FRANCO:'FRANCO', OFF:'OFF', COMPENSATORIO:'COMP.', VACACION:'VAC.'};
           leftCell = '<td class="td-left td-show-canal fn-left-' + fn + '" rowspan="1"><span class="td-canal-vert">' + (ABSENCE_LABELS[fn]||fn) + '</span></td>';
         }
       } else {
@@ -773,9 +773,9 @@ function renderDayView(data) {
   });
 
   // Secciones de ausencia
-  var ABSENCE_COLORS = {OFF:'var(--fn-off)', COMPENSATORIO:'var(--fn-compensatorio)', VACACION:'var(--fn-vacacion)'};
-  var ABSENCE_LABELS_DV = {OFF:'OFF / Franco', COMPENSATORIO:'Compensatorio', VACACION:'Vacaciones'};
-  ['OFF','COMPENSATORIO','VACACION'].forEach(function(fn) {
+  var ABSENCE_COLORS = {FRANCO:'var(--fn-franco)', OFF:'var(--fn-off)', COMPENSATORIO:'var(--fn-compensatorio)', VACACION:'var(--fn-vacacion)'};
+  var ABSENCE_LABELS_DV = {FRANCO:'Franco', OFF:'OFF / Enfermo', COMPENSATORIO:'Compensatorio', VACACION:'Vacaciones'};
+  ['FRANCO','OFF','COMPENSATORIO','VACACION'].forEach(function(fn) {
     var abs = turnos.filter(function(t) { return t.tipo === 'libre' && t.funcion === fn; });
     if (!abs.length) return;
     var color = ABSENCE_COLORS[fn];

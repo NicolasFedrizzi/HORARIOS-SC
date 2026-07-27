@@ -11,6 +11,7 @@ from datetime import date, timedelta
 
 SHEET_ID    = '19j3H-fgf6dYwDqHISyjEbejrwg0xivf1'
 SHEET_ID_V2 = '1ViiKSaVKdha4c-6Bb9lvfChOz9OltHrc'   # formato alternativo (col1=sección, col2+=datos)
+SHEET_ID_V3 = '1YV5tyWpZ_0D1m09NmgRSfy2pDaUfZmF0'   # NUEVOS HORARIOS (5 cols/día)
 
 # Canales para el formato v2 (filas intermedias con nombre de canal)
 CANAL_DETECT_V2 = [
@@ -46,6 +47,22 @@ ABSENCE_SECTIONS = {
     'COMPENSATORIO': 'COMPENSATORIO',
     'VACACIONES':    'VACACION',
     'VACACION':      'VACACION',
+    'FRANCO':        'FRANCO',
+}
+
+# ── Constantes para formato v3 (NUEVOS HORARIOS) ─────────────────────────────
+CANAL_DETECT_V3 = [
+    ('SHOWS - ESPN CHILE',         'CHI'),
+    ('SHOWS - ESPN COLOMBIA',      'COL'),
+    ('SHOWS - ESPN CENTROAMERICA', 'CAM'),
+    ('SHOWS - ESPN2',              'ESPN 2/ESPN3'),
+    ('SHOWS - ESPN',               'ESPN'),
+]
+
+FUNC_MAP_V3 = {
+    'AIRE':    'AIRE',
+    'GRAFICA': 'ZOCALOS',   # renombrado en la nueva planilla
+    'EDICION': 'EDICION',
 }
 
 DAY_HEADERS = {
@@ -374,6 +391,185 @@ def parse_semana_v2(year, semana_num, raw_csv):
     return turnos
 
 
+def _detect_canal_v3(text):
+    t = text.strip().upper()
+    for key, val in CANAL_DETECT_V3:
+        if t.startswith(key):
+            return val
+    return None
+
+
+def fetch_semana_v3_csv(semana_num=None):
+    """
+    Descarga CSV de la nueva planilla (SHEET_ID_V3).
+    Intenta: 'SEMANA #N', 'HORARIOS 2026 - SEMANA #N', 'HORARIOS 2026'.
+    """
+    base = f'https://docs.google.com/spreadsheets/d/{SHEET_ID_V3}/gviz/tq?tqx=out:csv'
+    candidates = []
+    if semana_num is not None:
+        candidates += [
+            f'SEMANA #{semana_num}',
+            f'HORARIOS 2026 - SEMANA #{semana_num}',
+            f'SEMANA {semana_num}',
+        ]
+    candidates.append('HORARIOS 2026')  # fallback: pestaña única actual
+    for tab in candidates:
+        try:
+            r = requests.get(base + '&sheet=' + requests.utils.quote(tab), timeout=15)
+            if r.status_code == 200 and len(r.text) > 200:
+                return r.text
+        except Exception:
+            pass
+    return None
+
+
+def parse_semana_v3(year, semana_num, raw_csv):
+    """
+    Parser para NUEVOS HORARIOS (v3).
+    Estructura: DATA_START=1 (col B), COLS_PER_DAY=5 (B,C,D,E,F por día).
+      Shows  : B=show_time (merged↕), C=AIRE/GRAFICA/EDICION, D=work_time, E=empleado
+      Tareas : B=sección (CONTENIDOS cada fila; PLACAS/TEXTOS merged), C=work_time, E=empleado
+      Ausencias: fila cabecera FRANCO/VACACIONES/OFF → filas de empleados con E=nombre
+    """
+    monday = semana_start_date(year, semana_num)
+    day_dates = [monday + timedelta(days=i) for i in range(7)]
+
+    df = pd.read_csv(StringIO(raw_csv), header=None, dtype=str).fillna('')
+    rows = df.values.tolist()
+
+    DATA_START   = 1
+    COLS_PER_DAY = 5
+
+    DAY_NAMES_UP = {
+        'LUNES', 'MARTES', 'MIERCOLES', 'MIÉRCOLES',
+        'JUEVES', 'VIERNES', 'SABADO', 'SÁBADO', 'DOMINGO',
+    }
+
+    current_canal      = 'ESPN'
+    current_task_fn    = None   # 'PLACAS' | 'TEXTOS' (secciones con merge vertical)
+    current_absence_fn = None   # 'FRANCO' | 'VACACION' | 'OFF'
+    current_show_times = [('', '')] * 7  # show_time activo por día
+
+    turnos = []
+
+    for raw_row in rows:
+        row = [str(v).strip() for v in raw_row] + [''] * 60
+
+        # Identificador de fila: preferir col B; si vacía usar col A
+        c_b = row[DATA_START].strip().upper()
+        c_a = row[0].strip().upper()
+        row_id = c_b or c_a
+
+        # Fila de nombres de días
+        if row_id in DAY_NAMES_UP:
+            continue
+
+        # Fila de canal: "SHOWS - ESPN CHILE" etc.
+        canal_det = _detect_canal_v3(row_id)
+        if canal_det:
+            current_canal      = canal_det
+            current_task_fn    = None
+            current_absence_fn = None
+            current_show_times = [('', '')] * 7
+            continue
+
+        # Fila de sección de ausencia: FRANCO / VACACIONES / OFF
+        if row_id in ABSENCE_SECTIONS:
+            current_absence_fn = ABSENCE_SECTIONS[row_id]
+            current_task_fn    = None
+            continue
+
+        # Fila de sección de tarea con merge vertical (PLACAS / TEXTOS):
+        # la primera fila del merge tiene el label; las siguientes tienen c_b vacío.
+        if c_b in ('PLACAS', 'TEXTOS'):
+            current_task_fn    = c_b
+            current_absence_fn = None
+
+        # Procesar cada día (Lunes=0 … Viernes=4; columnas extra quedan vacías)
+        for di in range(5):
+            off = DATA_START + di * COLS_PER_DAY
+            c0 = row[off + 0]   # B: show_time o sección o vacío
+            c1 = row[off + 1]   # C: función (shows) o work_time (tareas)
+            c2 = row[off + 2]   # D: work_time (shows) o vacío (tareas)
+            c3 = row[off + 3]   # E: nombre del empleado
+
+            emp = c3.strip()
+            c0_up = c0.strip().upper()
+            c1_up = c1.strip().upper()
+
+            # Sin empleado válido → saltar
+            if not emp or emp in ('--', 'nan') or emp.upper() in ('PAUTA', 'HORARIO'):
+                continue
+
+            # ── Shows: función en col C ──────────────────────────────────────
+            if c1_up in FUNC_MAP_V3:
+                fn    = FUNC_MAP_V3[c1_up]
+                canal = current_canal
+                if re.search(r'\d{1,2}:\d{2}', c0):
+                    current_show_times[di] = _parse_time_range(c0)
+                show_i, show_f = current_show_times[di]
+                ingreso, egreso = _parse_time_range(c2)
+                tipo = 'trabajo'
+
+            # ── CONTENIDOS / SC NEXT (cada fila tiene label en c0) ──────────
+            elif c0_up in ('CONTENIDOS', 'SC NEXT'):
+                fn      = 'CONTENIDOS'
+                canal   = ''
+                show_i  = show_f = ''
+                ingreso, egreso = _parse_time_range(c1)
+                tipo    = 'trabajo'
+
+            # ── PLACAS: primera fila + continuaciones (merge vertical) ───────
+            elif c0_up == 'PLACAS' or (not c0 and current_task_fn == 'PLACAS'):
+                fn      = 'PLACAS'
+                canal   = ''
+                show_i  = show_f = ''
+                ingreso, egreso = _parse_time_range(c1)
+                tipo    = 'trabajo'
+
+            # ── TEXTOS: primera fila + continuaciones (merge vertical) ───────
+            elif c0_up == 'TEXTOS' or (not c0 and current_task_fn == 'TEXTOS'):
+                fn      = 'TEXTOS'
+                canal   = ''
+                show_i  = show_f = ''
+                ingreso, egreso = _parse_time_range(c1)
+                tipo    = 'trabajo'
+
+            # ── Ausencias: FRANCO / VACACIONES / OFF ────────────────────────
+            elif current_absence_fn:
+                turnos.append({
+                    'fecha':       day_dates[di].isoformat(),
+                    'semana':      semana_num,
+                    'funcion':     current_absence_fn,
+                    'canal':       '',
+                    'show_inicio': '',
+                    'show_fin':    '',
+                    'empleado':    emp,
+                    'ingreso':     '',
+                    'egreso':      '',
+                    'tipo':        'libre',
+                })
+                continue
+
+            else:
+                continue
+
+            turnos.append({
+                'fecha':       day_dates[di].isoformat(),
+                'semana':      semana_num,
+                'funcion':     fn,
+                'canal':       canal,
+                'show_inicio': show_i,
+                'show_fin':    show_f,
+                'empleado':    emp,
+                'ingreso':     ingreso,
+                'egreso':      egreso,
+                'tipo':        tipo,
+            })
+
+    return turnos
+
+
 def import_from_gsheets(db, year, weeks):
     """
     Importa semanas desde la Google Sheet a la DB.
@@ -394,17 +590,26 @@ def import_from_gsheets(db, year, weeks):
 
     for semana_num in weeks:
         try:
-            csv_text = fetch_semana_csv(semana_num)
-            turnos = parse_semana(year, semana_num, csv_text) if csv_text else []
+            # v3: nueva planilla (NUEVOS HORARIOS, 5 cols/día)
+            csv_v3 = fetch_semana_v3_csv(semana_num)
+            turnos = parse_semana_v3(year, semana_num, csv_v3) if csv_v3 else []
 
-            # Si el sheet principal devolvió muy pocos turnos (formato incorrecto),
-            # intentar con el sheet alternativo v2
-            if len(turnos) < 10:
+            # v2: planilla alternativa anterior
+            if len(turnos) < 5:
                 csv_v2 = fetch_semana_v2_csv(semana_num)
                 if csv_v2:
-                    turnos_v2 = parse_semana_v2(year, semana_num, csv_v2)
-                    if len(turnos_v2) > len(turnos):
-                        turnos = turnos_v2
+                    tv2 = parse_semana_v2(year, semana_num, csv_v2)
+                    if len(tv2) > len(turnos):
+                        turnos = tv2
+
+            # v1: planilla original
+            if len(turnos) < 5:
+                csv_v1 = fetch_semana_csv(semana_num)
+                if csv_v1:
+                    tv1 = parse_semana(year, semana_num, csv_v1)
+                    if len(tv1) > len(turnos):
+                        turnos = tv1
+
         except Exception as e:
             stats['errores'].append(f'SEMANA {semana_num}: {e}')
             continue

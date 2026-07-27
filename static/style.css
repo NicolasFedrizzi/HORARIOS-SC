@@ -26,6 +26,7 @@
   --fn-off:            #ef4444;
   --fn-compensatorio:  #f59e0b;
   --fn-vacacion:       #10b981;
+  --fn-franco:         #3b82f6;
 }
 
 body { font-family: 'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
@@ -242,6 +243,8 @@ tr.canal-break .td-show-canal { border-top: none !important; }
 .fn-left-COMPENSATORIO { border-left-color:var(--fn-compensatorio) !important; }
 .fn-left-VACACION    .td-canal-vert { color:var(--fn-vacacion); }
 .fn-left-VACACION    { border-left-color:var(--fn-vacacion) !important; }
+.fn-left-FRANCO      .td-canal-vert { color:var(--fn-franco); }
+.fn-left-FRANCO      { border-left-color:var(--fn-franco) !important; }
 .absence-name { font-size:0.82rem; color:var(--text2); }
 
 /* Accent bar per function */
