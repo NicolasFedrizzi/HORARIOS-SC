@@ -490,8 +490,8 @@ def parse_semana_v3(year, semana_num, raw_csv):
                 current_absence_fn = None
                 break
 
-        # Procesar cada día (Lunes=0 … Viernes=4; columnas extra quedan vacías)
-        for di in range(5):
+        # Procesar cada día (Lunes=0 … Domingo=6)
+        for di in range(7):
             off = DATA_START + di * COLS_PER_DAY
             c0 = row[off + 0]   # B: show_time o sección o vacío
             c1 = row[off + 1]   # C: función (shows) o work_time (tareas)
