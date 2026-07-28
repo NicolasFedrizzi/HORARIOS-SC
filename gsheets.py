@@ -47,7 +47,8 @@ ABSENCE_SECTIONS = {
     'COMPENSATORIO': 'COMPENSATORIO',
     'VACACIONES':    'VACACION',
     'VACACION':      'VACACION',
-    'FRANCO':        'FRANCO',
+    'FRANCO':             'FRANCO',
+    'DIAS COMPENSATORIOS':'COMPENSATORIO',
 }
 
 # ── Constantes para formato v3 (NUEVOS HORARIOS) ─────────────────────────────
@@ -479,11 +480,15 @@ def parse_semana_v3(year, semana_num, raw_csv):
             current_task_fn    = None
             continue
 
-        # Fila de sección de tarea con merge vertical (PLACAS / TEXTOS):
-        # la primera fila del merge tiene el label; las siguientes tienen c_b vacío.
-        if c_b in ('PLACAS', 'TEXTOS'):
-            current_task_fn    = c_b
-            current_absence_fn = None
+        # Detectar sección de tarea (PLACAS / TEXTOS) escaneando todos los días.
+        # El label puede no estar en Lunes (ej: 'B100' = id de estudio) pero sí en
+        # los otros días del mismo row.
+        for _di in range(5):
+            _c0 = row[DATA_START + _di * COLS_PER_DAY].strip().upper()
+            if _c0 in ('PLACAS', 'TEXTOS'):
+                current_task_fn    = _c0
+                current_absence_fn = None
+                break
 
         # Procesar cada día (Lunes=0 … Viernes=4; columnas extra quedan vacías)
         for di in range(5):
@@ -519,16 +524,20 @@ def parse_semana_v3(year, semana_num, raw_csv):
                 ingreso, egreso = _parse_time_range(c1)
                 tipo    = 'trabajo'
 
-            # ── PLACAS: primera fila + continuaciones (merge vertical) ───────
-            elif c0_up == 'PLACAS' or (not c0 and current_task_fn == 'PLACAS'):
+            # ── PLACAS: label explícito, continuación vacía, o id de estudio ──
+            elif c0_up == 'PLACAS' or (current_task_fn == 'PLACAS'
+                    and c0_up not in ('CONTENIDOS', 'SC NEXT', 'TEXTOS')
+                    and c1_up not in FUNC_MAP_V3):
                 fn      = 'PLACAS'
                 canal   = ''
                 show_i  = show_f = ''
                 ingreso, egreso = _parse_time_range(c1)
                 tipo    = 'trabajo'
 
-            # ── TEXTOS: primera fila + continuaciones (merge vertical) ───────
-            elif c0_up == 'TEXTOS' or (not c0 and current_task_fn == 'TEXTOS'):
+            # ── TEXTOS: label explícito o continuación ────────────────────────
+            elif c0_up == 'TEXTOS' or (current_task_fn == 'TEXTOS'
+                    and c0_up not in ('CONTENIDOS', 'SC NEXT', 'PLACAS')
+                    and c1_up not in FUNC_MAP_V3):
                 fn      = 'TEXTOS'
                 canal   = ''
                 show_i  = show_f = ''
