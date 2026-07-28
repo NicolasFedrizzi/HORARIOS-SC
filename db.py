@@ -68,25 +68,29 @@ def get_stats(empleado_id, year=None):
     year_filter = " AND strftime('%Y', t.fecha) = ?" if year else ""
     params_base = [empleado_id] + ([str(year)] if year else [])
 
+    # Días trabajados: fechas únicas (una persona puede tener varios turnos el mismo día)
     dias_trabajo = db.execute(
-        f"SELECT COUNT(*) as c FROM turnos t WHERE t.empleado_id=? AND t.tipo='trabajo'{year_filter}",
+        f"SELECT COUNT(DISTINCT fecha) as c FROM turnos t WHERE t.empleado_id=? AND t.tipo='trabajo'{year_filter}",
         params_base
     ).fetchone()['c']
 
     dias_libres = db.execute(
-        f"SELECT COUNT(*) as c FROM turnos t WHERE t.empleado_id=? AND t.tipo='libre'{year_filter}",
+        f"SELECT COUNT(DISTINCT fecha) as c FROM turnos t WHERE t.empleado_id=? AND t.tipo='libre'{year_filter}",
         params_base
     ).fetchone()['c']
 
     feriados_trabajados = db.execute(
-        f"""SELECT COUNT(*) as c FROM turnos t
+        f"""SELECT COUNT(DISTINCT t.fecha) as c FROM turnos t
             JOIN feriados f ON t.fecha = f.fecha
             WHERE t.empleado_id=? AND t.tipo='trabajo'{year_filter}""",
         params_base
     ).fetchone()['c']
 
+    # Horas: deduplicar por (fecha, ingreso, egreso) para no contar el mismo turno
+    # varias veces cuando una persona aparece en múltiples shows con el mismo horario.
     shifts = db.execute(
-        f"SELECT ingreso, egreso FROM turnos t WHERE t.empleado_id=? AND t.tipo='trabajo' AND ingreso!='' AND egreso!=''{year_filter}",
+        f"""SELECT DISTINCT fecha, ingreso, egreso FROM turnos t
+            WHERE t.empleado_id=? AND t.tipo='trabajo' AND ingreso!='' AND egreso!=''{year_filter}""",
         params_base
     ).fetchall()
 
