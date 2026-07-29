@@ -518,6 +518,8 @@ def parse_semana_v3(year, semana_num, raw_csv):
 
             # ── CONTENIDOS / SC NEXT (cada fila tiene label en c0) ──────────
             elif c0_up in ('CONTENIDOS', 'SC NEXT'):
+                if c1_up in ('--', ''):
+                    continue
                 fn      = 'CONTENIDOS'
                 canal   = ''
                 show_i  = show_f = ''
@@ -528,6 +530,8 @@ def parse_semana_v3(year, semana_num, raw_csv):
             elif c0_up == 'PLACAS' or (current_task_fn == 'PLACAS'
                     and c0_up not in ('CONTENIDOS', 'SC NEXT', 'TEXTOS')
                     and c1_up not in FUNC_MAP_V3):
+                if c1_up in ('--', ''):
+                    continue
                 fn      = 'PLACAS'
                 canal   = ''
                 show_i  = show_f = ''
@@ -538,6 +542,8 @@ def parse_semana_v3(year, semana_num, raw_csv):
             elif c0_up == 'TEXTOS' or (current_task_fn == 'TEXTOS'
                     and c0_up not in ('CONTENIDOS', 'SC NEXT', 'PLACAS')
                     and c1_up not in FUNC_MAP_V3):
+                if c1_up in ('--', ''):
+                    continue
                 fn      = 'TEXTOS'
                 canal   = ''
                 show_i  = show_f = ''
