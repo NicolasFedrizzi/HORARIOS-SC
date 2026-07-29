@@ -394,8 +394,10 @@ tr.canal-break .td-show-canal { border-top: none !important; }
 .extras-totals-row .td-left { font-size:0.72rem; letter-spacing:0.06em; color:var(--text2); }
 
 /* Celda de nombre: nombre arriba, badge de función abajo separado */
+.extras-table .th-left  { width:180px; min-width:160px; max-width:220px; }
+.extras-table .td-left  { width:180px; min-width:160px; max-width:220px; padding:6px 8px; }
 .extras-name-cell { display:table-cell; }
-.extras-name-cell .td-name { display:block; }
+.extras-name-cell .td-name { display:block; max-width:none; white-space:normal; overflow:visible; text-overflow:clip; }
 .extras-fn-tag {
   display:inline-block; margin-top:3px;
   font-size:0.62rem; font-weight:700; letter-spacing:0.05em;
