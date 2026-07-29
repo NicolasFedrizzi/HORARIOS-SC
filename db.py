@@ -86,11 +86,14 @@ def get_stats(empleado_id, year=None):
         params_base
     ).fetchone()['c']
 
-    # Horas: deduplicar por (fecha, ingreso, egreso) para no contar el mismo turno
-    # varias veces cuando una persona aparece en múltiples shows con el mismo horario.
+    # Horas: una persona puede aparecer en varios shows con horarios solapados.
+    # Se agrupa por fecha y se toma el rango total cubierto (MIN ingreso → MAX egreso).
     shifts = db.execute(
-        f"""SELECT DISTINCT fecha, ingreso, egreso FROM turnos t
-            WHERE t.empleado_id=? AND t.tipo='trabajo' AND ingreso!='' AND egreso!=''{year_filter}""",
+        f"""SELECT fecha, MIN(ingreso) as ingreso, MAX(egreso) as egreso
+            FROM turnos t
+            WHERE t.empleado_id=? AND t.tipo='trabajo' AND ingreso!='' AND egreso!=''
+            {year_filter}
+            GROUP BY fecha""",
         params_base
     ).fetchall()
 

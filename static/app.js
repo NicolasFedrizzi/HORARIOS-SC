@@ -1223,22 +1223,54 @@ el('gs-confirm').addEventListener('click', async () => {
       el('extras-week-dates').textContent = fmtDateShort(dias[0].fecha) + ' \u2013 ' + fmtDateShort(dias[6].fecha) + ' \u00b7 ' + SE.year;
     }
 
-    // Recopilar todos los turnos de trabajo
-    // Estructura: empMap[nombre] = { dias: { di: {hrs, extra} }, totalHrs, totalExtra, funcion }
-    var empMap = {};
+    // Calcular la unión de rangos horarios para evitar doble conteo.
+    // Si alguien aparece en 2 shows con horarios solapados (ej: 14:00-22:00 y 15:00-23:00),
+    // se cuenta el bloque real cubierto (14:00-23:00 = 9h), no la suma (16h).
+    function mergeShiftHours(shifts) {
+      var ivs = shifts.map(function(s) {
+        var p = function(t) { var pts = t.split(':'); return +pts[0]*60 + +pts[1]; };
+        var start = p(s.i), end = p(s.e);
+        if (end < start) end += 1440;
+        return [start, end];
+      });
+      ivs.sort(function(a,b){ return a[0]-b[0]; });
+      var merged = [];
+      ivs.forEach(function(iv) {
+        if (merged.length && iv[0] <= merged[merged.length-1][1])
+          merged[merged.length-1][1] = Math.max(merged[merged.length-1][1], iv[1]);
+        else
+          merged.push(iv.slice());
+      });
+      return merged.reduce(function(s,iv){ return s + iv[1]-iv[0]; }, 0) / 60;
+    }
+
+    // Paso 1: recopilar turnos únicos por (empleado, día)
+    var empRaw = {};
     dias.forEach(function(d, di) {
       d.turnos.forEach(function(t) {
-        if (t.tipo !== 'trabajo') return;
-        var hrs = timeDiffHours(t.ingreso, t.egreso);
-        if (!hrs) return;
-        var extra = hrs > 8 ? hrs - 8 : 0;
-        var nombre = t.emp_nombre;
-        if (!empMap[nombre]) empMap[nombre] = { dias: {}, totalHrs: 0, totalExtra: 0, funcion: t.funcion };
-        var prev = empMap[nombre].dias[di] || { hrs: 0, extra: 0 };
-        empMap[nombre].dias[di] = { hrs: prev.hrs + hrs, extra: prev.extra + extra };
-        empMap[nombre].totalHrs += hrs;
-        empMap[nombre].totalExtra += extra;
+        if (t.tipo !== 'trabajo' || !t.ingreso || !t.egreso) return;
+        var n = t.emp_nombre;
+        if (!empRaw[n]) empRaw[n] = { diShifts: {}, funcion: t.funcion };
+        if (!empRaw[n].diShifts[di]) empRaw[n].diShifts[di] = [];
+        var key = t.ingreso + '-' + t.egreso;
+        if (!empRaw[n].diShifts[di].some(function(s){ return s.k === key; }))
+          empRaw[n].diShifts[di].push({ i: t.ingreso, e: t.egreso, k: key });
       });
+    });
+
+    // Paso 2: computar horas usando unión de rangos
+    var empMap = {};
+    Object.keys(empRaw).forEach(function(n) {
+      var raw = empRaw[n];
+      var emp = { dias: {}, totalHrs: 0, totalExtra: 0, funcion: raw.funcion };
+      Object.keys(raw.diShifts).forEach(function(di) {
+        var hrs = mergeShiftHours(raw.diShifts[di]);
+        var extra = Math.max(0, hrs - 8);
+        emp.dias[+di] = { hrs: hrs, extra: extra };
+        emp.totalHrs += hrs;
+        emp.totalExtra += extra;
+      });
+      empMap[n] = emp;
     });
 
     var nombres = Object.keys(empMap).sort();
@@ -1268,26 +1300,27 @@ el('gs-confirm').addEventListener('click', async () => {
       var fnClass = 'fn-row-' + (emp.funcion || 'AIRE');
 
       html += '<tr class="data-row extras-row ' + fnClass + '">' +
-        '<td class="td-left"><span class="td-name">' + nameS + '</span>' +
-        (emp.funcion ? '<span class="td-shift" style="font-size:0.68rem;opacity:0.6">' + emp.funcion + '</span>' : '') +
+        '<td class="td-left extras-name-cell">' +
+          '<span class="td-name">' + nameS + '</span>' +
+          (emp.funcion ? '<span class="extras-fn-tag fn-color-' + emp.funcion + '">' + emp.funcion + '</span>' : '') +
         '</td>';
 
       dias.forEach(function(_, di) {
         var day = emp.dias[di];
-        if (day) {
+        if (day && day.hrs > 0) {
           var cls = day.extra > 0 ? 'extras-cell extras-has' : 'extras-cell';
-          var extraTag = day.extra > 0 ? '<span class="extras-h">+' + day.extra.toFixed(1) + 'hs</span>' : '';
           html += '<td class="td-day ' + cls + '">' +
-            '<span style="font-size:0.8rem">' + day.hrs.toFixed(1) + 'hs</span>' + extraTag +
+            '<span class="extras-hrs">' + day.hrs.toFixed(1) + '</span>' +
+            (day.extra > 0 ? '<span class="extras-h">+' + day.extra.toFixed(1) + '</span>' : '') +
             '</td>';
         } else {
           html += '<td class="td-day td-empty">—</td>';
         }
       });
 
-      var totalTag = emp.totalExtra > 0 ? '<br><span class="extras-h">+' + emp.totalExtra.toFixed(1) + ' extra</span>' : '';
       html += '<td class="td-day extras-cell extras-total">' +
-        '<span style="font-size:0.8rem">' + emp.totalHrs.toFixed(1) + 'hs</span>' + totalTag +
+        '<span class="extras-hrs">' + emp.totalHrs.toFixed(1) + '</span>' +
+        (emp.totalExtra > 0 ? '<span class="extras-h">+' + emp.totalExtra.toFixed(1) + '</span>' : '') +
         '</td>';
       html += '</tr>';
     });
@@ -1295,19 +1328,23 @@ el('gs-confirm').addEventListener('click', async () => {
     // Fila de totales por día
     html += '<tr class="extras-totals-row"><td class="td-left"><strong>TOTAL DÍA</strong></td>';
     dias.forEach(function(_, di) {
-      var totalHrsDia = nombres.reduce(function(sum, n) { return sum + ((empMap[n].dias[di] || {hrs:0}).hrs); }, 0);
-      var totalExtraDia = nombres.reduce(function(sum, n) { return sum + ((empMap[n].dias[di] || {extra:0}).extra); }, 0);
+      var totalHrsDia   = nombres.reduce(function(s,n){ return s + ((empMap[n].dias[di]||{hrs:0}).hrs); }, 0);
+      var totalExtraDia = nombres.reduce(function(s,n){ return s + ((empMap[n].dias[di]||{extra:0}).extra); }, 0);
       if (totalHrsDia > 0) {
-        var extraTag = totalExtraDia > 0 ? '<br><span class="extras-h">+' + totalExtraDia.toFixed(1) + '</span>' : '';
-        html += '<td class="td-day extras-cell extras-total"><span style="font-size:0.8rem">' + totalHrsDia.toFixed(1) + 'hs</span>' + extraTag + '</td>';
+        html += '<td class="td-day extras-cell extras-total">' +
+          '<span class="extras-hrs">' + totalHrsDia.toFixed(1) + '</span>' +
+          (totalExtraDia > 0 ? '<span class="extras-h">+' + totalExtraDia.toFixed(1) + '</span>' : '') +
+          '</td>';
       } else {
         html += '<td class="td-day td-empty">—</td>';
       }
     });
-    var totalHrsSemana = nombres.reduce(function(sum, n) { return sum + empMap[n].totalHrs; }, 0);
-    var totalExtraSemana = nombres.reduce(function(sum, n) { return sum + empMap[n].totalExtra; }, 0);
-    var grandExtraTag = totalExtraSemana > 0 ? '<br><span class="extras-h">+' + totalExtraSemana.toFixed(1) + ' extra</span>' : '';
-    html += '<td class="td-day extras-cell extras-total extras-grand"><span style="font-size:0.8rem">' + totalHrsSemana.toFixed(1) + 'hs</span>' + grandExtraTag + '</td>';
+    var totalHrsSemana   = nombres.reduce(function(s,n){ return s + empMap[n].totalHrs; }, 0);
+    var totalExtraSemana = nombres.reduce(function(s,n){ return s + empMap[n].totalExtra; }, 0);
+    html += '<td class="td-day extras-cell extras-total extras-grand">' +
+      '<span class="extras-hrs">' + totalHrsSemana.toFixed(1) + '</span>' +
+      (totalExtraSemana > 0 ? '<span class="extras-h">+' + totalExtraSemana.toFixed(1) + '</span>' : '') +
+      '</td>';
     html += '</tr>';
 
     html += '</tbody></table>';
