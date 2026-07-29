@@ -585,6 +585,31 @@ def parse_semana_v3(year, semana_num, raw_csv):
     return turnos
 
 
+def fetch_semana_v2b_csv(semana_num=None):
+    """
+    Descarga CSV de la planilla de horarios (SHEET_ID_V3).
+    Intenta en orden: 'HORARIO SC 2026 - S#N', variantes antiguas, y fallback al tab template.
+    """
+    base = f'https://docs.google.com/spreadsheets/d/{SHEET_ID_V3}/gviz/tq?tqx=out:csv'
+    if semana_num is not None:
+        candidates = [
+            f'HORARIO SC 2026 - S#{semana_num}',
+            f'SEMANA #{semana_num} - V2',
+            f'SEMANA {semana_num} - V2',
+        ]
+    else:
+        candidates = ['HORARIO SC 2026 - V2']
+    for tab in candidates:
+        try:
+            r = requests.get(base + '&sheet=' + requests.utils.quote(tab), timeout=15)
+            if r.status_code == 200 and len(r.text) > 200:
+                return r.text
+        except Exception:
+            pass
+    return None
+
+
+
 def import_from_gsheets(db, year, weeks):
     """
     Importa semanas desde la Google Sheet a la DB.
@@ -605,9 +630,17 @@ def import_from_gsheets(db, year, weeks):
 
     for semana_num in weeks:
         try:
-            # v3: nueva planilla (NUEVOS HORARIOS, 5 cols/día)
-            csv_v3 = fetch_semana_v3_csv(semana_num)
-            turnos = parse_semana_v3(year, semana_num, csv_v3) if csv_v3 else []
+            # v2b: pestaña "HORARIO SC 2026 - V2" (mismo formato v3, nombre diferente)
+            csv_v2b = fetch_semana_v2b_csv(semana_num)
+            turnos = parse_semana_v3(year, semana_num, csv_v2b) if csv_v2b else []
+
+            # v3: planilla principal (NUEVOS HORARIOS, 5 cols/día)
+            if len(turnos) < 5:
+                csv_v3 = fetch_semana_v3_csv(semana_num)
+                if csv_v3:
+                    tv3 = parse_semana_v3(year, semana_num, csv_v3)
+                    if len(tv3) > len(turnos):
+                        turnos = tv3
 
             # v2: planilla alternativa anterior
             if len(turnos) < 5:
