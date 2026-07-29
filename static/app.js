@@ -1295,14 +1295,12 @@ el('gs-confirm').addEventListener('click', async () => {
 
     nombres.forEach(function(nombre) {
       var emp = empMap[nombre];
-      var parts = nombre.trim().split(' ');
-      var nameS = parts.length >= 2 ? parts[parts.length-1] + ', ' + parts[0] : nombre;
+      var clean = nombre.replace(/\s*\(.*?\)\s*/g, ' ').trim();
       var fnClass = 'fn-row-' + (emp.funcion || 'AIRE');
 
       html += '<tr class="data-row extras-row ' + fnClass + '">' +
         '<td class="td-left extras-name-cell">' +
-          '<span class="td-name">' + nameS + '</span>' +
-          (emp.funcion ? '<span class="extras-fn-tag fn-color-' + emp.funcion + '">' + emp.funcion + '</span>' : '') +
+          '<span class="td-name">' + clean + '</span>' +
         '</td>';
 
       dias.forEach(function(_, di) {
