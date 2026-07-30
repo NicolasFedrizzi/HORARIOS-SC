@@ -585,6 +585,139 @@ def parse_semana_v3(year, semana_num, raw_csv):
     return turnos
 
 
+def parse_semana_v2b(year, semana_num, raw_csv):
+    """
+    Parser para pestañas 'HORARIO SC 2026 - S#N' (formato 4 cols/día).
+    Estructura: 7 días × 4 cols (show_time, work_time, empleado, separador).
+    Función y canal determinados por header de sección.
+    """
+    monday = semana_start_date(year, semana_num)
+    day_dates = [monday + timedelta(days=i) for i in range(7)]
+
+    df = pd.read_csv(StringIO(raw_csv), header=None, dtype=str).fillna('')
+    rows = df.values.tolist()
+
+    COLS_PER_DAY = 4
+    NUM_DAYS = 7
+
+    FUNC_MAP = {
+        'AIRE':    'AIRE',
+        'EDICIÓN': 'EDICION',
+        'EDICION': 'EDICION',
+        'ZOCALOS': 'ZOCALOS',
+        'ZÓCALOS': 'ZOCALOS',
+    }
+
+    current_funcion    = 'AIRE'
+    current_canal      = 'ESPN'
+    current_task_fn    = None
+    current_absence_fn = None
+    current_show_times = [('', '')] * NUM_DAYS
+
+    turnos = []
+
+    for row_idx, raw_row in enumerate(rows):
+        row   = [str(v).strip() for v in raw_row] + [''] * (NUM_DAYS * COLS_PER_DAY + 4)
+        c0    = row[0];  c1 = row[1];  c2 = row[2]
+        c0_up = c0.upper(); c1_up = c1.upper(); c2_up = c2.upper()
+
+        if row_idx == 0:
+            continue
+
+        # Header de sección SHOWS: establece canal y función
+        if c0_up.startswith('SHOWS -') or c0_up.startswith('SHOWS-'):
+            canal_det = _detect_canal_v3(c0)
+            if canal_det:
+                current_canal = canal_det
+            if c1_up == 'HORARIO' and c2_up in FUNC_MAP:
+                current_funcion = FUNC_MAP[c2_up]
+            current_task_fn    = None
+            current_absence_fn = None
+            current_show_times = [('', '')] * NUM_DAYS
+            continue
+
+        # Header de sección de ausencia (FRANCO, OFF, COMPENSATORIO, VACACIONES…)
+        if c0_up in ABSENCE_SECTIONS and not c1 and not c2:
+            current_absence_fn = ABSENCE_SECTIONS[c0_up]
+            current_task_fn    = None
+            continue
+
+        # Header puro de CONTENIDOS / SC NEXT (sin datos)
+        if c0_up in ('CONTENIDOS', 'SC NEXT') and not c1 and not c2:
+            continue
+
+        # Inicio de sección PLACAS / TEXTOS (detectado por col0 del primer día)
+        if c0_up in ('PLACAS', 'TEXTOS'):
+            current_task_fn    = c0_up
+            current_absence_fn = None
+
+        for di in range(NUM_DAYS):
+            off   = di * COLS_PER_DAY
+            d0    = row[off];     d1 = row[off + 1];  d2 = row[off + 2]
+            d0_up = d0.upper();  d1_up = d1.upper();  d2_up = d2.upper()
+
+            if not d2 or d2_up in ('--', 'NAN', 'PAUTA', 'HORARIO'):
+                continue
+
+            if d0_up in ('CONTENIDOS', 'SC NEXT'):
+                if d1_up in ('--', ''):
+                    continue
+                fn, canal = 'CONTENIDOS', ''
+                show_i = show_f = ''
+                ingreso, egreso = _parse_time_range(d1)
+                tipo = 'trabajo'
+
+            elif d0_up == 'PLACAS' or (current_task_fn == 'PLACAS' and d0_up == '' and d1_up not in ('', '--')):
+                fn, canal = 'PLACAS', ''
+                show_i = show_f = ''
+                ingreso, egreso = _parse_time_range(d1)
+                if not ingreso:
+                    continue
+                tipo = 'trabajo'
+
+            elif d0_up == 'TEXTOS' or (current_task_fn == 'TEXTOS' and d0_up == '' and d1_up not in ('', '--')):
+                fn, canal = 'TEXTOS', ''
+                show_i = show_f = ''
+                ingreso, egreso = _parse_time_range(d1)
+                if not ingreso:
+                    continue
+                tipo = 'trabajo'
+
+            elif current_absence_fn:
+                turnos.append({
+                    'fecha': day_dates[di].isoformat(), 'semana': semana_num,
+                    'funcion': current_absence_fn, 'canal': '',
+                    'show_inicio': '', 'show_fin': '',
+                    'empleado': d2, 'ingreso': '', 'egreso': '', 'tipo': 'libre',
+                })
+                continue
+
+            elif re.search(r'\d{1,2}:\d{2}', d0):
+                fn    = current_funcion;  canal = current_canal
+                current_show_times[di] = _parse_time_range(d0)
+                show_i, show_f = current_show_times[di]
+                ingreso, egreso = _parse_time_range(d1)
+                tipo = 'trabajo'
+
+            elif d0_up == '' and current_task_fn is None and re.search(r'\d{1,2}:\d{2}', d1):
+                fn    = current_funcion;  canal = current_canal
+                show_i, show_f = current_show_times[di]
+                ingreso, egreso = _parse_time_range(d1)
+                tipo = 'trabajo'
+
+            else:
+                continue
+
+            turnos.append({
+                'fecha': day_dates[di].isoformat(), 'semana': semana_num,
+                'funcion': fn, 'canal': canal,
+                'show_inicio': show_i, 'show_fin': show_f,
+                'empleado': d2, 'ingreso': ingreso, 'egreso': egreso, 'tipo': tipo,
+            })
+
+    return turnos
+
+
 def fetch_semana_v2b_csv(semana_num=None):
     """
     Descarga CSV de la planilla de horarios (SHEET_ID_V3).
@@ -630,9 +763,15 @@ def import_from_gsheets(db, year, weeks):
 
     for semana_num in weeks:
         try:
-            # v2b: pestaña "HORARIO SC 2026 - V2" (mismo formato v3, nombre diferente)
+            # v2b: pestañas 'HORARIO SC 2026 - S#N'
+            # Auto-detecta formato: ≤28 cols → 4-col (v2b), >28 → 5-col (v3)
             csv_v2b = fetch_semana_v2b_csv(semana_num)
-            turnos = parse_semana_v3(year, semana_num, csv_v2b) if csv_v2b else []
+            if csv_v2b:
+                import pandas as _pd; from io import StringIO as _SIO
+                _ncols = len(_pd.read_csv(_SIO(csv_v2b), header=None, nrows=1).columns)
+                turnos = parse_semana_v2b(year, semana_num, csv_v2b) if _ncols <= 28 else parse_semana_v3(year, semana_num, csv_v2b)
+            else:
+                turnos = []
 
             # v3: planilla principal (NUEVOS HORARIOS, 5 cols/día)
             if len(turnos) < 5:
