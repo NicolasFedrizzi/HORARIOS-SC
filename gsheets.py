@@ -86,7 +86,7 @@ def _parse_time_range(s):
     if not s: return '', ''
     s = str(s).strip()
     if s in ('--', 'nan', '', 'a confirmar', 'A CONFIRMAR'): return '', ''
-    m = re.match(r'(\d{1,2}:\d{2})\s+a\s+(\d{1,2}:\d{2})', s)
+    m = re.match(r'(\d{1,2}:\d{2})\s*a\s*(\d{1,2}:\d{2})', s)
     return (m.group(1), m.group(2)) if m else ('', '')
 
 
@@ -615,6 +615,7 @@ def parse_semana_v2b(year, semana_num, raw_csv):
     current_show_times = [('', '')] * NUM_DAYS
 
     turnos = []
+    seen_shifts = set()  # (empleado, fecha, ingreso, egreso) para evitar duplicados multi-canal
 
     for row_idx, raw_row in enumerate(rows):
         row   = [str(v).strip() for v in raw_row] + [''] * (NUM_DAYS * COLS_PER_DAY + 4)
@@ -707,6 +708,11 @@ def parse_semana_v2b(year, semana_num, raw_csv):
 
             else:
                 continue
+
+            shift_key = (d2, day_dates[di].isoformat(), ingreso, egreso)
+            if shift_key in seen_shifts:
+                continue
+            seen_shifts.add(shift_key)
 
             turnos.append({
                 'fecha': day_dates[di].isoformat(), 'semana': semana_num,
