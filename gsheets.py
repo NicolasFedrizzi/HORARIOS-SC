@@ -652,6 +652,9 @@ def parse_semana_v2b(year, semana_num, raw_csv):
             current_task_fn    = c0_up
             current_absence_fn = None
 
+        # Show time de LUNES (col0 = row[0]) como referencia para días sin d0
+        _lunes_show = _parse_time_range(c0) if re.search(r'\d{1,2}:\d{2}', c0) else None
+
         for di in range(NUM_DAYS):
             off   = di * COLS_PER_DAY
             d0    = row[off];     d1 = row[off + 1];  d2 = row[off + 2]
@@ -702,7 +705,17 @@ def parse_semana_v2b(year, semana_num, raw_csv):
 
             elif d0_up == '' and current_task_fn is None and re.search(r'\d{1,2}:\d{2}', d1):
                 fn    = current_funcion;  canal = current_canal
-                show_i, show_f = current_show_times[di]
+                # current_show_times[di] se actualiza solo cuando ese día tiene d0 explícito.
+                # En el formato v2b el show_time solo aparece en LUNES; para los demás días
+                # usamos el show_time de LUNES de la misma fila como referencia.
+                if current_show_times[di][0]:
+                    show_i, show_f = current_show_times[di]
+                elif _lunes_show:
+                    # Cada fila v2b lleva su propio show_time en LUNES; no persistir en
+                    # current_show_times[di] para no contaminar la siguiente fila.
+                    show_i, show_f = _lunes_show
+                else:
+                    show_i, show_f = ('', '')
                 ingreso, egreso = _parse_time_range(d1)
                 tipo = 'trabajo'
 
