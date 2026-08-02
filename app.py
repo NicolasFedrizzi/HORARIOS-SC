@@ -441,6 +441,73 @@ def _import_from_excel():
     return stats
 
 
+# ── AUSENCIAS (modificar Google Sheet) ────────────────────────────────────────
+
+@app.route('/api/ausencia', methods=['POST'])
+def api_ausencia():
+    """
+    Mueve un empleado a una sección de ausencia en la Google Sheet y en la DB.
+    Body: { semana, empleado, dias: ['lunes','martes',...], tipo: 'VACACION'|'FRANCO'|'COMPENSATORIO'|'OFF' }
+    """
+    data = request.json or {}
+    semana   = int(data.get('semana', 0))
+    empleado = data.get('empleado', '').strip()
+    dias     = data.get('dias', [])
+    tipo     = data.get('tipo', '').upper()
+
+    if not semana or not empleado or not dias or not tipo:
+        return jsonify({'error': 'Faltan campos: semana, empleado, dias, tipo'}), 400
+
+    # 1. Modificar Google Sheet
+    sheet_result = None
+    try:
+        from gsheets_write import move_to_absence
+        sheet_result = move_to_absence(semana, empleado, dias, tipo)
+    except Exception as e:
+        sheet_result = {'error': str(e)}
+
+    # 2. Actualizar DB: borrar turnos de trabajo de esos días y crear turno libre
+    from gsheets import semana_start_date
+    monday = semana_start_date(date.today().year, semana)
+    DAY_IDX = {'lunes':0,'martes':1,'miercoles':2,'miércoles':2,
+               'jueves':3,'viernes':4,'sabado':5,'sábado':5,'domingo':6}
+
+    db = get_db()
+    emp_row = db.execute(
+        "SELECT id FROM empleados WHERE UPPER(nombre)=?", (empleado.upper(),)
+    ).fetchone()
+
+    db_changes = []
+    if emp_row:
+        emp_id = emp_row['id']
+        for dia in dias:
+            di = DAY_IDX.get(dia.lower().strip())
+            if di is None:
+                continue
+            fecha = (monday + timedelta(days=di)).isoformat()
+            # Borrar turno de trabajo existente
+            db.execute(
+                "DELETE FROM turnos WHERE fecha=? AND empleado_id=? AND tipo='trabajo'",
+                (fecha, emp_id)
+            )
+            # Insertar turno libre
+            db.execute(
+                """INSERT INTO turnos (fecha, semana, empleado_id, tipo, funcion, canal,
+                   show_inicio, show_fin, ingreso, egreso)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                (fecha, semana, emp_id, 'libre', tipo, '', '', '', '', '')
+            )
+            db_changes.append(fecha)
+        db.commit()
+    db.close()
+
+    return jsonify({
+        'ok': True,
+        'sheet': sheet_result,
+        'db_fechas': db_changes,
+    })
+
+
 # ── GOOGLE SHEETS ──────────────────────────────────────────────────────────────
 
 @app.route('/api/gsheets/status')
