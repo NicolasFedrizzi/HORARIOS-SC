@@ -143,18 +143,26 @@ def move_to_absence(semana_num, empleado_name, dias, absence_type):
     return {'semana': semana_num, 'changes': changes}
 
 
-def setup_week_tabs(start_week=32, end_week=52, year=2026):
+def setup_week_tabs(start_week=32, end_week=52, year=2026, template_week=34):
     """
     Para cada semana de start_week a end_week:
       - Si la pestaña existe: actualiza la fila 1 con los días fechados
         (ej: 'LUNES 3 DE AGOSTO').
-      - Si no existe: crea la pestaña y escribe la fila de encabezado.
+      - Si no existe: duplica la pestaña template_week y actualiza los encabezados.
     Retorna lista de resultados por semana.
     """
     gc = _get_client()
     sh = gc.open_by_key(SHEET_ID_V3)
 
-    existing = {ws.title: ws for ws in sh.worksheets()}
+    worksheets = sh.worksheets()
+    existing = {ws.title: ws for ws in worksheets}
+
+    # Buscar la pestaña template
+    template_name = _tab_name(template_week)
+    if template_name not in existing:
+        raise RuntimeError(f'Pestaña template "{template_name}" no existe')
+    template_id = existing[template_name].id
+
     results = []
 
     for week in range(start_week, end_week + 1):
@@ -175,8 +183,12 @@ def setup_week_tabs(start_week=32, end_week=52, year=2026):
             ws = existing[tab_name]
             action = 'updated'
         else:
-            ws = sh.add_worksheet(title=tab_name, rows=100, cols=TOTAL_COLS_V2B)
-            action = 'created'
+            # Duplicar la pestaña template
+            ws = sh.duplicate_sheet(
+                source_sheet_id=template_id,
+                new_sheet_name=tab_name,
+            )
+            action = 'created (copy of S#{})'.format(template_week)
 
         # Actualizar solo las celdas de nombre de día en fila 1
         batch = []
