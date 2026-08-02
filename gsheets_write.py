@@ -5,10 +5,22 @@ Permite mover empleados a secciones de ausencia (FRANCO, VACACIONES, COMPENSATOR
 import os
 import json
 import re
+from datetime import date, timedelta
 import gspread
 from google.oauth2.service_account import Credentials
 
-SHEET_ID_V3 = '1YV5tyWpZ_0D1m09NmgRSfy2pDaUfZmF0'
+MONTHS_ES = {
+    1: 'ENERO', 2: 'FEBRERO', 3: 'MARZO', 4: 'ABRIL',
+    5: 'MAYO', 6: 'JUNIO', 7: 'JULIO', 8: 'AGOSTO',
+    9: 'SEPTIEMBRE', 10: 'OCTUBRE', 11: 'NOVIEMBRE', 12: 'DICIEMBRE',
+}
+
+# En v2b (4 cols/día) los encabezados de días están en estas columnas (0-indexed)
+DAY_NAMES_V2B = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO', 'DOMINGO']
+DAY_COLS_V2B  = [0, 4, 8, 12, 16, 20, 24]
+TOTAL_COLS_V2B = 27
+
+SHEET_ID_V3 = '1fE-3M8n9DvlUaNZVFYit-mq-oAQAP4Yxy7DM1L5lKyg'
 
 SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
@@ -129,3 +141,56 @@ def move_to_absence(semana_num, empleado_name, dias, absence_type):
         })
 
     return {'semana': semana_num, 'changes': changes}
+
+
+def setup_week_tabs(start_week=32, end_week=52, year=2026):
+    """
+    Para cada semana de start_week a end_week:
+      - Si la pestaña existe: actualiza la fila 1 con los días fechados
+        (ej: 'LUNES 3 DE AGOSTO').
+      - Si no existe: crea la pestaña y escribe la fila de encabezado.
+    Retorna lista de resultados por semana.
+    """
+    gc = _get_client()
+    sh = gc.open_by_key(SHEET_ID_V3)
+
+    existing = {ws.title: ws for ws in sh.worksheets()}
+    results = []
+
+    for week in range(start_week, end_week + 1):
+        tab_name = _tab_name(week)
+        monday = date.fromisocalendar(year, week, 1)
+
+        # Construir los 7 labels con fecha
+        labels = []
+        for di, name in enumerate(DAY_NAMES_V2B):
+            d = monday + timedelta(days=di)
+            month_name = MONTHS_ES[d.month]
+            label = f'{name} {d.day} DE {month_name}'
+            if name == 'DOMINGO':
+                label += ' / ESPN'
+            labels.append(label)
+
+        if tab_name in existing:
+            ws = existing[tab_name]
+            action = 'updated'
+        else:
+            ws = sh.add_worksheet(title=tab_name, rows=100, cols=TOTAL_COLS_V2B)
+            action = 'created'
+
+        # Actualizar solo las celdas de nombre de día en fila 1
+        batch = []
+        for col_idx, label in zip(DAY_COLS_V2B, labels):
+            a1 = gspread.utils.rowcol_to_a1(1, col_idx + 1)
+            batch.append({'range': a1, 'values': [[label]]})
+        ws.batch_update(batch)
+
+        results.append({
+            'semana': week,
+            'tab':    tab_name,
+            'monday': monday.isoformat(),
+            'action': action,
+            'labels': labels,
+        })
+
+    return results

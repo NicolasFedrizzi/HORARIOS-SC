@@ -538,6 +538,20 @@ def api_gsheets_sync():
     return jsonify(result)
 
 
+@app.route('/api/admin/setup-tabs', methods=['POST'])
+def api_setup_tabs():
+    """Crea/actualiza pestañas S#32-S#52 con encabezados de días fechados."""
+    data = request.get_json() or {}
+    start_week = int(data.get('start', 32))
+    end_week   = int(data.get('end', 52))
+    try:
+        from gsheets_write import setup_week_tabs
+        results = setup_week_tabs(start_week, end_week)
+        return jsonify({'ok': True, 'results': results})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # ── INIT ───────────────────────────────────────────────────────────────────────
 
 init_db()

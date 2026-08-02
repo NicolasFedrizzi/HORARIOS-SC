@@ -11,7 +11,7 @@ from datetime import date, timedelta
 
 SHEET_ID    = '19j3H-fgf6dYwDqHISyjEbejrwg0xivf1'
 SHEET_ID_V2 = '1ViiKSaVKdha4c-6Bb9lvfChOz9OltHrc'   # formato alternativo (col1=sección, col2+=datos)
-SHEET_ID_V3 = '1YV5tyWpZ_0D1m09NmgRSfy2pDaUfZmF0'   # NUEVOS HORARIOS (5 cols/día)
+SHEET_ID_V3 = '1fE-3M8n9DvlUaNZVFYit-mq-oAQAP4Yxy7DM1L5lKyg'   # NUEVOS HORARIOS (5 cols/día)
 
 # Canales para el formato v2 (filas intermedias con nombre de canal)
 CANAL_DETECT_V2 = [
