@@ -1184,6 +1184,32 @@ el('gs-confirm').addEventListener('click', async () => {
   }
 });
 
+el('gs-setup-tabs').addEventListener('click', async () => {
+  const btn = el('gs-setup-tabs');
+  const status = el('gs-status');
+  btn.disabled = true;
+  status.textContent = 'Creando pestañas S#32-S#52 en Google Sheets...';
+  status.style.color = '';
+  try {
+    const res = await fetch('/api/admin/setup-tabs', { method: 'POST',
+      headers: {'Content-Type':'application/json'}, body: '{}' });
+    const data = await res.json();
+    if (data.ok) {
+      const created  = data.results.filter(r => r.action.startsWith('created')).length;
+      const updated  = data.results.filter(r => r.action === 'updated').length;
+      status.textContent = `✓ ${created} pestañas creadas, ${updated} actualizadas`;
+      status.style.color = '#34d399';
+    } else {
+      status.textContent = 'Error: ' + (data.error || 'desconocido');
+      status.style.color = '#f87171';
+    }
+  } catch(e) {
+    status.textContent = 'Error de red: ' + e.message;
+    status.style.color = '#f87171';
+  }
+  btn.disabled = false;
+});
+
 // ─── HORAS EXTRA VIEW ─────────────────────────────────────────────────────────
 
 (function() {
