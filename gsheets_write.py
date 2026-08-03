@@ -97,32 +97,40 @@ def move_to_absence(semana_num, empleado_name, dias, absence_type):
 
         emp_col = di * COLS_PER_DAY + 2  # columna del empleado para este día (0-indexed)
 
-        # ── 1. Borrar TODAS las ocurrencias en filas de trabajo ──────────────
+        # ── 1. Borrar de filas de trabajo y del target section (idempotente) ─
+        # Limpia el empleado de filas de trabajo Y del target section (header + datos).
+        # Deja intactas otras secciones de ausencia.
         removed_rows = []
         for row_idx, row in enumerate(all_values):
-            if emp_col < len(row) and row[emp_col].strip().upper() == emp_upper:
-                c0 = row[0].strip().upper() if row else ''
-                if c0 in ABSENCE_HEADERS:
-                    continue  # no tocar filas de ausencia
-                a1 = gspread.utils.rowcol_to_a1(row_idx + 1, emp_col + 1)
-                ws.update_cell(row_idx + 1, emp_col + 1, '')
-                # Limpiar color de fondo de la celda
-                ws.format(a1, {
-                    'backgroundColor': {'red': 1.0, 'green': 1.0, 'blue': 1.0, 'alpha': 1.0}
-                })
-                all_values[row_idx][emp_col] = ''
-                removed_rows.append(row_idx + 1)
+            if emp_col >= len(row):
+                continue
+            c0 = row[0].strip().upper() if row else ''
+            if row[emp_col].strip().upper() != emp_upper:
+                continue
+            if c0 in ABSENCE_HEADERS and c0 != section_label:
+                continue  # otra sección de ausencia → no tocar
+            a1 = gspread.utils.rowcol_to_a1(row_idx + 1, emp_col + 1)
+            ws.update_cell(row_idx + 1, emp_col + 1, '')
+            ws.format(a1, {
+                'backgroundColor': {'red': 1.0, 'green': 1.0, 'blue': 1.0, 'alpha': 1.0}
+            })
+            all_values[row_idx][emp_col] = ''
+            removed_rows.append(row_idx + 1)
 
-        # ── 2. Agregar en la primera fila vacía DEBAJO del header de ausencia ─
+        # ── 2. Agregar en la primera fila de DATOS (no el header visual) ──────
+        # En v2b cada fila de la sección repite el label en col0.
+        # Saltamos solo la primera aparición (header visual) y colocamos en la siguiente.
         placed_at = None
         in_section = False
         for row_idx, row in enumerate(all_values):
             c0 = row[0].strip().upper() if row else ''
             if c0 == section_label:
-                in_section = True
-                continue  # saltar la fila del header; colocar en las de abajo
+                if not in_section:
+                    in_section = True
+                    continue  # primera fila = header visual → saltarla
+                # filas siguientes con mismo label = filas de datos → fall through
             if in_section:
-                if c0 != '':  # llegamos a otra sección
+                if c0 not in ('', section_label):  # llegamos a otra sección
                     break
                 if emp_col >= len(row) or not row[emp_col].strip():
                     ws.update_cell(row_idx + 1, emp_col + 1, empleado_name.strip().upper())
