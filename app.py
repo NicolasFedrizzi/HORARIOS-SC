@@ -538,6 +538,24 @@ def api_gsheets_sync():
     return jsonify(result)
 
 
+@app.route('/api/ausencia/sheet', methods=['POST'])
+def api_ausencia_sheet_only():
+    """Modifica solo el Google Sheet (sin tocar la DB). Mismos campos que /api/ausencia."""
+    data = request.json or {}
+    semana   = int(data.get('semana', 0))
+    empleado = data.get('empleado', '').strip()
+    dias     = data.get('dias', [])
+    tipo     = data.get('tipo', '').upper()
+    if not semana or not empleado or not dias or not tipo:
+        return jsonify({'error': 'Faltan campos: semana, empleado, dias, tipo'}), 400
+    try:
+        from gsheets_write import move_to_absence
+        result = move_to_absence(semana, empleado, dias, tipo)
+        return jsonify({'ok': True, 'sheet': result})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/admin/setup-tabs', methods=['POST'])
 def api_setup_tabs():
     """Crea/actualiza pestañas S#32-S#52 con encabezados de días fechados."""
