@@ -84,6 +84,9 @@ def move_to_absence(semana_num, empleado_name, dias, absence_type):
     emp_upper  = empleado_name.strip().upper()
     section_label = ABSENCE_SECTION_LABELS.get(absence_type.upper(), absence_type.upper())
 
+    ABSENCE_HEADERS = {'FRANCO', 'VACACIONES', 'VACACION', 'OFF',
+                       'COMPENSATORIO', 'COMPENSATORIOS', 'DIAS COMPENSATORIOS'}
+
     changes = []
 
     for dia_raw in dias:
@@ -94,47 +97,44 @@ def move_to_absence(semana_num, empleado_name, dias, absence_type):
 
         emp_col = di * COLS_PER_DAY + 2  # columna del empleado para este día (0-indexed)
 
-        # ── 1. Borrar de la sección de trabajo ──────────────────────────────
-        removed_from = None
+        # ── 1. Borrar TODAS las ocurrencias en filas de trabajo ──────────────
+        removed_rows = []
         for row_idx, row in enumerate(all_values):
-            if emp_col < len(row):
-                cell_val = row[emp_col].strip().upper()
-                if cell_val == emp_upper:
-                    # Verificar que no sea una fila de ausencia (evitar quitar de la sección correcta)
-                    c0 = row[0].strip().upper() if row else ''
-                    if c0 in ('FRANCO', 'VACACIONES', 'VACACION', 'OFF',
-                              'COMPENSATORIO', 'COMPENSATORIOS', 'DIAS COMPENSATORIOS'):
-                        continue
-                    # Borrar la celda (row_idx y emp_col son 0-indexed, gspread usa 1-indexed)
-                    ws.update_cell(row_idx + 1, emp_col + 1, '')
-                    removed_from = row_idx + 1
-                    break
+            if emp_col < len(row) and row[emp_col].strip().upper() == emp_upper:
+                c0 = row[0].strip().upper() if row else ''
+                if c0 in ABSENCE_HEADERS:
+                    continue  # no tocar filas de ausencia
+                a1 = gspread.utils.rowcol_to_a1(row_idx + 1, emp_col + 1)
+                ws.update_cell(row_idx + 1, emp_col + 1, '')
+                # Limpiar color de fondo de la celda
+                ws.format(a1, {
+                    'backgroundColor': {'red': 1.0, 'green': 1.0, 'blue': 1.0, 'alpha': 1.0}
+                })
+                all_values[row_idx][emp_col] = ''
+                removed_rows.append(row_idx + 1)
 
-        # ── 2. Agregar en la sección de ausencia ────────────────────────────
+        # ── 2. Agregar en la primera fila vacía DEBAJO del header de ausencia ─
         placed_at = None
         in_section = False
         for row_idx, row in enumerate(all_values):
             c0 = row[0].strip().upper() if row else ''
-            # Detectar inicio de la sección
             if c0 == section_label:
                 in_section = True
-            # Si estamos en la sección: buscar la primera celda vacía del día
-            if in_section and c0 in (section_label, ''):
+                continue  # saltar la fila del header; colocar en las de abajo
+            if in_section:
+                if c0 != '':  # llegamos a otra sección
+                    break
                 if emp_col >= len(row) or not row[emp_col].strip():
                     ws.update_cell(row_idx + 1, emp_col + 1, empleado_name.strip().upper())
                     placed_at = row_idx + 1
-                    # Refrescar all_values para que las siguientes iteraciones vean el cambio
                     all_values[row_idx][emp_col] = empleado_name.strip().upper()
                     break
-            # Salir si llegamos a otra sección diferente
-            elif in_section and c0 not in (section_label, ''):
-                break
 
         changes.append({
             'dia':          dia_raw,
             'empleado':     emp_upper,
             'absence_type': section_label,
-            'removed_row':  removed_from,
+            'removed_rows': removed_rows,
             'placed_row':   placed_at,
             'ok':           placed_at is not None,
             'msg':          'OK' if placed_at else 'No se encontró fila libre en la sección',
