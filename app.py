@@ -485,9 +485,9 @@ def api_ausencia():
             if di is None:
                 continue
             fecha = (monday + timedelta(days=di)).isoformat()
-            # Borrar turno de trabajo existente
+            # Borrar todos los turnos existentes de ese empleado en esa fecha
             db.execute(
-                "DELETE FROM turnos WHERE fecha=? AND empleado_id=? AND tipo='trabajo'",
+                "DELETE FROM turnos WHERE fecha=? AND empleado_id=?",
                 (fecha, emp_id)
             )
             # Insertar turno libre
