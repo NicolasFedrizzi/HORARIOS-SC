@@ -638,14 +638,14 @@ def parse_semana_v2b(year, semana_num, raw_csv):
             continue
 
         # Header de sección de ausencia (FRANCO, OFF, COMPENSATORIO, VACACIONES…)
-        # Solo tratar como header si ningún día tiene empleado; si algún día tiene empleado
-        # es una fila de datos donde LUNES está vacío pero otros días tienen asignación.
+        # Siempre actualizar current_absence_fn al ver el header, aunque la misma fila
+        # tenga empleados en días distintos a LUNES.
         if c0_up in ABSENCE_SECTIONS and not c1 and not c2:
+            current_absence_fn = ABSENCE_SECTIONS[c0_up]
+            current_task_fn    = None
             has_any_emp = any(row[di * COLS_PER_DAY + 2] for di in range(NUM_DAYS))
             if not has_any_emp:
-                current_absence_fn = ABSENCE_SECTIONS[c0_up]
-                current_task_fn    = None
-                continue
+                continue  # solo header sin empleados → siguiente fila
 
         # Header puro de CONTENIDOS / SC NEXT (sin datos)
         if c0_up in ('CONTENIDOS', 'SC NEXT') and not c1 and not c2:
