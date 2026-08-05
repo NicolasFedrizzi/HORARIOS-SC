@@ -274,6 +274,38 @@
       <button class="btn btn-ghost btn-sm" id="gs-setup-tabs" title="Crea las pestañas S#32-S#52 en el Google Sheet con los días fechados">Crear Pestañas</button>
       <button class="btn btn-gsheets" id="gs-confirm">Sincronizar</button>
     </div>
+
+    <hr style="margin:1.2rem 0;border:none;border-top:1px solid var(--border)">
+    <p style="font-size:0.82rem;font-weight:600;margin-bottom:0.7rem">Mover empleado a ausencia en el Sheet</p>
+    <div class="form-row">
+      <label>Semana</label>
+      <input type="number" id="gs-aus-semana" value="32" min="1" max="52" style="width:70px">
+      <label style="margin-left:0.8rem">Tipo</label>
+      <select id="gs-aus-tipo" style="width:140px">
+        <option value="COMPENSATORIO">Compensatorio</option>
+        <option value="VACACION">Vacaciones</option>
+        <option value="FRANCO">Franco</option>
+        <option value="OFF">OFF</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>Empleado</label>
+      <input type="text" id="gs-aus-emp" placeholder="APELLIDO NOMBRE" style="width:220px;text-transform:uppercase">
+    </div>
+    <div class="form-row" style="align-items:flex-start">
+      <label style="padding-top:2px">Días</label>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+        <label style="font-size:0.8rem"><input type="checkbox" class="gs-aus-dia" value="lunes"> Lun</label>
+        <label style="font-size:0.8rem"><input type="checkbox" class="gs-aus-dia" value="martes"> Mar</label>
+        <label style="font-size:0.8rem"><input type="checkbox" class="gs-aus-dia" value="miercoles"> Mié</label>
+        <label style="font-size:0.8rem"><input type="checkbox" class="gs-aus-dia" value="jueves"> Jue</label>
+        <label style="font-size:0.8rem"><input type="checkbox" class="gs-aus-dia" value="viernes"> Vie</label>
+        <label style="font-size:0.8rem"><input type="checkbox" class="gs-aus-dia" value="sabado"> Sáb</label>
+        <label style="font-size:0.8rem"><input type="checkbox" class="gs-aus-dia" value="domingo"> Dom</label>
+      </div>
+    </div>
+    <div id="gs-aus-status" style="font-size:0.82rem;min-height:1rem;margin:0.4rem 0"></div>
+    <button class="btn btn-primary btn-sm" id="gs-aus-confirm">Actualizar Sheet</button>
   </div>
 </div>
 

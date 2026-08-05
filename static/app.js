@@ -1184,6 +1184,37 @@ el('gs-confirm').addEventListener('click', async () => {
   }
 });
 
+el('gs-aus-confirm').addEventListener('click', async () => {
+  const btn    = el('gs-aus-confirm');
+  const status = el('gs-aus-status');
+  const emp    = el('gs-aus-emp').value.trim().toUpperCase();
+  const semana = parseInt(el('gs-aus-semana').value);
+  const tipo   = el('gs-aus-tipo').value;
+  const dias   = Array.from(document.querySelectorAll('.gs-aus-dia:checked')).map(cb => cb.value);
+  if (!emp) { status.textContent = 'Ingresá el nombre del empleado.'; status.style.color='#f87171'; return; }
+  if (!dias.length) { status.textContent = 'Seleccioná al menos un día.'; status.style.color='#f87171'; return; }
+  btn.disabled = true;
+  status.textContent = 'Actualizando Sheet...';
+  status.style.color = '';
+  try {
+    const res  = await fetch('/api/ausencia/sheet', { method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ semana, empleado: emp, dias, tipo }) });
+    const data = await res.json();
+    if (data.ok) {
+      status.textContent = '✓ Sheet actualizado. Ahora sincronizá la semana para actualizar la app.';
+      status.style.color = '#34d399';
+    } else {
+      status.textContent = 'Error: ' + (data.error || 'desconocido');
+      status.style.color = '#f87171';
+    }
+  } catch(e) {
+    status.textContent = 'Error de red: ' + e.message;
+    status.style.color = '#f87171';
+  }
+  btn.disabled = false;
+});
+
 el('gs-setup-tabs').addEventListener('click', async () => {
   const btn = el('gs-setup-tabs');
   const status = el('gs-status');
