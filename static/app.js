@@ -1201,16 +1201,25 @@ init();
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify({nombre: parsed.nombre, tipo: parsed.tipo, fechas: parsed.fechas}) });
       const data = await res.json();
-      if (data.ok) {
-        el('sol-apply-status').textContent = '✓ Aplicado correctamente en la app y el Sheet.';
-        el('sol-apply-status').style.color = '#34d399';
-        el('sol-apply').disabled = false;
-        loadWeek();
-      } else {
+      if (!data.ok) {
         el('sol-apply-status').textContent = 'Error: ' + (data.error || 'desconocido');
         el('sol-apply-status').style.color = '#f87171';
-        el('sol-apply').disabled = false;
+      } else if (data.sheet_error) {
+        el('sol-apply-status').textContent = '✓ App actualizada. Error en Sheet: ' + data.sheet_error;
+        el('sol-apply-status').style.color = '#fbbf24';
+        loadWeek();
+      } else {
+        const failed = (data.sheet_results || []).flatMap(r => (r.changes || []).filter(c => !c.ok).map(c => c.dia));
+        if (failed.length) {
+          el('sol-apply-status').textContent = '✓ App actualizada. Sheet: no se pudo colocar ' + failed.join(', ');
+          el('sol-apply-status').style.color = '#fbbf24';
+        } else {
+          el('sol-apply-status').textContent = '✓ Aplicado correctamente en la app y el Sheet.';
+          el('sol-apply-status').style.color = '#34d399';
+        }
+        loadWeek();
       }
+      el('sol-apply').disabled = false;
     } catch(e) {
       el('sol-apply-status').textContent = 'Error: ' + e.message;
       el('sol-apply-status').style.color = '#f87171';
