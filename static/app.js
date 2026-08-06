@@ -1287,6 +1287,22 @@ el('btn-gsheets-sync').addEventListener('click', () => {
   el('modal-gsheets').classList.add('open');
 });
 el('gs-cancel').addEventListener('click', () => el('modal-gsheets').classList.remove('open'));
+
+el('gs-reset').addEventListener('click', async () => {
+  if (!confirm('¿Borrar TODOS los datos de la app? Esta acción no se puede deshacer.')) return;
+  const status = el('gs-status');
+  status.textContent = 'Borrando...';
+  status.style.color = '';
+  const data = await api('/api/admin/reset', 'POST');
+  if (data.ok) {
+    status.textContent = '✓ Datos borrados. Podés sincronizar desde el Sheet.';
+    status.style.color = '#34d399';
+    loadWeek();
+  } else {
+    status.textContent = 'Error: ' + (data.error || 'desconocido');
+    status.style.color = '#f87171';
+  }
+});
 el('gs-btn-all').addEventListener('click', () => {
   el('gs-week-from').value = 1;
   el('gs-week-to').value   = 52;

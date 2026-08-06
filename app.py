@@ -554,6 +554,21 @@ def api_ausencia():
     })
 
 
+# ── RESET ──────────────────────────────────────────────────────────────────────
+
+@app.route('/api/admin/reset', methods=['POST'])
+@admin_required
+def api_reset():
+    """Borra todos los turnos, empleados, feriados y comp_usados de la DB."""
+    db = get_db()
+    db.execute("DELETE FROM turnos")
+    db.execute("DELETE FROM comp_usados")
+    db.execute("DELETE FROM feriados")
+    db.execute("DELETE FROM empleados")
+    db.commit()
+    db.close()
+    return jsonify({'ok': True, 'msg': 'Base de datos borrada'})
+
 # ── GOOGLE SHEETS ──────────────────────────────────────────────────────────────
 
 @app.route('/api/gsheets/status')
