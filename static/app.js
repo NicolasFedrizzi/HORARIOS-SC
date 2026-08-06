@@ -1137,9 +1137,66 @@ async function init() {
   initYearSelect();
   await loadEmployees();
   await loadWeek();
+  await checkAdminRole();
 }
 
 init();
+
+// ── ADMIN AUTH ────────────────────────────────────────────────────────────────
+function setAdminMode(isAdmin) {
+  if (isAdmin) {
+    document.body.setAttribute('data-admin', '');
+    el('btn-admin-lock').textContent = '🔓';
+    el('btn-admin-lock').title = 'Salir del modo administrador';
+  } else {
+    document.body.removeAttribute('data-admin');
+    el('btn-admin-lock').textContent = '🔒';
+    el('btn-admin-lock').title = 'Administrador';
+  }
+}
+
+async function checkAdminRole() {
+  try {
+    const data = await api('/api/me');
+    if (data.role === 'admin') setAdminMode(true);
+  } catch(e) {}
+}
+
+el('btn-admin-lock').addEventListener('click', async () => {
+  if (document.body.hasAttribute('data-admin')) {
+    await fetch('/api/admin-logout', { method: 'POST' });
+    setAdminMode(false);
+  } else {
+    el('admin-pw-input').value = '';
+    el('admin-login-error').textContent = '';
+    el('modal-admin-login').classList.add('open');
+    setTimeout(() => el('admin-pw-input').focus(), 50);
+  }
+});
+
+el('admin-login-cancel').addEventListener('click', () => {
+  el('modal-admin-login').classList.remove('open');
+});
+
+el('admin-login-submit').addEventListener('click', async () => {
+  const pw = el('admin-pw-input').value;
+  const res = await fetch('/api/admin-login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: pw }),
+  });
+  const data = await res.json();
+  if (data.ok) {
+    setAdminMode(true);
+    el('modal-admin-login').classList.remove('open');
+  } else {
+    el('admin-login-error').textContent = data.error || 'Contraseña incorrecta';
+  }
+});
+
+el('admin-pw-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') el('admin-login-submit').click();
+});
 
 // ── GOOGLE SHEETS SYNC ────────────────────────────────────────────────────────
 // ── SOLICITUD MODAL ────────────────────────────────────────────────────────────

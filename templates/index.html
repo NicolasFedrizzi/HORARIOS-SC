@@ -5,8 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Horarios de Personal</title>
 <link rel="stylesheet" href="/static/style.css">
+<style>
+  /* Admin mode */
+  .admin-only { display: none !important; }
+  body[data-admin] .nav-btn.admin-only  { display: inline-block !important; }
+  body[data-admin] .btn.admin-only      { display: inline-flex !important; }
+  body[data-admin] .btn-gsheets.admin-only { display: inline-flex !important; }
+  #btn-admin-lock { background:none; border:none; cursor:pointer; font-size:1rem;
+                    padding:0.25rem 0.4rem; border-radius:6px; opacity:0.45;
+                    transition:opacity 0.15s; line-height:1; }
+  #btn-admin-lock:hover { opacity:1; }
+</style>
 </head>
-<body>
+<body{% if role == 'admin' %} data-admin{% endif %}>
 
 <header>
   <div class="header-inner">
@@ -15,10 +26,11 @@
     </a>
     <nav>
       <button class="nav-btn active" data-view="semana">Semana</button>
-      <button class="nav-btn" data-view="extras">Horas Extra</button>
-      <button class="nav-btn" data-view="empleados">Empleados</button>
-      <button class="nav-btn" data-view="compensatorios">Compensatorios</button>
+      <button class="nav-btn admin-only" data-view="extras">Horas Extra</button>
+      <button class="nav-btn admin-only" data-view="empleados">Empleados</button>
+      <button class="nav-btn admin-only" data-view="compensatorios">Compensatorios</button>
     </nav>
+    <button id="btn-admin-lock" title="Administrador">🔒</button>
   </div>
 </header>
 
@@ -45,12 +57,12 @@
         <button class="view-toggle-btn" data-mode="cards" title="Vista tarjetas">▦</button>
         <button class="view-toggle-btn" data-mode="dia" title="Vista por día">☰</button>
       </div>
-      <button class="btn btn-ghost btn-sm" id="btn-solicitud" title="Procesar solicitud de ausencia por mail">✉ Solicitud</button>
-      <button class="btn btn-ghost btn-sm" id="btn-excel-upload" title="Importar Excel">↑ Excel</button>
-      <button class="btn btn-ghost btn-sm" id="btn-repetir" title="Copiar todos los turnos a la semana siguiente">↻ Repetir</button>
-      <button class="btn btn-gsheets" id="btn-gsheets-sync">⟳ Google Sheets</button>
+      <button class="btn btn-ghost btn-sm admin-only" id="btn-solicitud" title="Procesar solicitud de ausencia por mail">✉ Solicitud</button>
+      <button class="btn btn-ghost btn-sm admin-only" id="btn-excel-upload" title="Importar Excel">↑ Excel</button>
+      <button class="btn btn-ghost btn-sm admin-only" id="btn-repetir" title="Copiar todos los turnos a la semana siguiente">↻ Repetir</button>
+      <button class="btn btn-gsheets admin-only" id="btn-gsheets-sync">⟳ Google Sheets</button>
       <a class="btn btn-ghost btn-sm" id="btn-excel-download" href="/api/excel/download" download>↓ Plantilla</a>
-      <button class="btn btn-primary" id="btn-add-turno">+ Turno</button>
+      <button class="btn btn-primary admin-only" id="btn-add-turno">+ Turno</button>
     </div>
     <input type="file" id="excel-file-input" accept=".xlsx,.xls" style="display:none">
   </div>
@@ -341,6 +353,21 @@
       <button class="btn btn-ghost" id="sol-cancel">Cancelar</button>
       <button class="btn btn-ghost" id="sol-parse">Parsear</button>
       <button class="btn btn-primary hidden" id="sol-apply">Aplicar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Admin login modal -->
+<div class="modal-overlay" id="modal-admin-login">
+  <div class="modal" style="max-width:320px">
+    <h3>Acceso administrador</h3>
+    <div class="form-group" style="margin-bottom:0.75rem">
+      <input type="password" id="admin-pw-input" placeholder="Contraseña" class="form-control" style="width:100%">
+    </div>
+    <div id="admin-login-error" style="color:#f87171;font-size:0.82rem;min-height:1.2em;margin-bottom:0.5rem"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="admin-login-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="admin-login-submit">Entrar</button>
     </div>
   </div>
 </div>

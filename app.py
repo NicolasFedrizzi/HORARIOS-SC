@@ -1,4 +1,5 @@
-from flask import Flask, jsonify, render_template, request, send_file
+from flask import Flask, jsonify, render_template, request, send_file, session
+from functools import wraps
 from datetime import date, timedelta
 import sqlite3
 import os
@@ -10,6 +11,15 @@ from gsheets import import_from_gsheets, fetch_semana_csv
 EXCEL_PATH = os.path.join(os.path.dirname(__file__), 'horarios_data.xlsx')
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'horarios-dev-key-cambiar-en-prod')
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if session.get('role') != 'admin':
+            return jsonify({'error': 'Se requiere acceso de administrador'}), 403
+        return f(*args, **kwargs)
+    return decorated
 
 CANALES = ['ESPN', 'ESPN 2/ESPN3', 'CHI', 'COL', 'CAM', 'REGIONES']
 FUNCIONES = ['AIRE', 'EDICION', 'ZOCALOS', 'PLACAS', 'TEXTOS', 'CONTENIDOS']
@@ -24,11 +34,33 @@ def iso_week_dates(year, week):
 def row_to_dict(row):
     return dict(row)
 
+# ── AUTH ───────────────────────────────────────────────────────────────────────
+
+@app.route('/api/me')
+def api_me():
+    return jsonify({'role': session.get('role', 'viewer')})
+
+@app.route('/api/admin-login', methods=['POST'])
+def api_admin_login():
+    pw = (request.json or {}).get('password', '')
+    admin_pw = os.environ.get('ADMIN_PASSWORD', '')
+    if not admin_pw:
+        return jsonify({'ok': False, 'error': 'ADMIN_PASSWORD no configurado en el servidor'}), 500
+    if pw == admin_pw:
+        session['role'] = 'admin'
+        return jsonify({'ok': True})
+    return jsonify({'ok': False, 'error': 'Contraseña incorrecta'}), 401
+
+@app.route('/api/admin-logout', methods=['POST'])
+def api_admin_logout():
+    session.pop('role', None)
+    return jsonify({'ok': True})
+
 # ── PAGES ──────────────────────────────────────────────────────────────────────
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', role=session.get('role', 'viewer'))
 
 # ── EMPLEADOS ──────────────────────────────────────────────────────────────────
 
@@ -40,6 +72,7 @@ def api_get_empleados():
     return jsonify([row_to_dict(r) for r in rows])
 
 @app.route('/api/empleados', methods=['POST'])
+@admin_required
 def api_add_empleado():
     data = request.json
     db = get_db()
@@ -54,6 +87,7 @@ def api_add_empleado():
     return jsonify(row_to_dict(emp)), 201
 
 @app.route('/api/empleados/<int:eid>', methods=['PUT'])
+@admin_required
 def api_update_empleado(eid):
     data = request.json
     db = get_db()
@@ -67,6 +101,7 @@ def api_update_empleado(eid):
     return jsonify(row_to_dict(emp))
 
 @app.route('/api/empleados/<int:eid>', methods=['DELETE'])
+@admin_required
 def api_delete_empleado(eid):
     db = get_db()
     db.execute("DELETE FROM empleados WHERE id=?", (eid,))
@@ -98,6 +133,7 @@ def api_get_feriados():
     return jsonify([row_to_dict(r) for r in rows])
 
 @app.route('/api/feriados', methods=['POST'])
+@admin_required
 def api_add_feriado():
     data = request.json
     db = get_db()
@@ -115,6 +151,7 @@ def api_add_feriado():
         return jsonify({'error': 'Feriado ya existe'}), 409
 
 @app.route('/api/feriados/<int:fid>', methods=['DELETE'])
+@admin_required
 def api_delete_feriado(fid):
     db = get_db()
     db.execute("DELETE FROM feriados WHERE id=?", (fid,))
@@ -158,6 +195,7 @@ def api_semana(year, week):
 # ── TURNOS ─────────────────────────────────────────────────────────────────────
 
 @app.route('/api/turnos', methods=['POST'])
+@admin_required
 def api_add_turno():
     data = request.json
     fecha = data['fecha']
@@ -183,6 +221,7 @@ def api_add_turno():
     return jsonify(row_to_dict(row)), 201
 
 @app.route('/api/turnos/<int:tid>', methods=['PUT'])
+@admin_required
 def api_update_turno(tid):
     data = request.json
     db = get_db()
@@ -202,6 +241,7 @@ def api_update_turno(tid):
     return jsonify(row_to_dict(row))
 
 @app.route('/api/turnos/<int:tid>', methods=['DELETE'])
+@admin_required
 def api_delete_turno(tid):
     db = get_db()
     db.execute("DELETE FROM turnos WHERE id=?", (tid,))
@@ -233,6 +273,7 @@ def api_compensatorios():
     })
 
 @app.route('/api/comp_usados', methods=['POST'])
+@admin_required
 def api_add_comp_usado():
     data = request.json
     db = get_db()
@@ -246,6 +287,7 @@ def api_add_comp_usado():
     return jsonify(row_to_dict(row)), 201
 
 @app.route('/api/comp_usados/<int:cid>', methods=['DELETE'])
+@admin_required
 def api_delete_comp_usado(cid):
     db = get_db()
     db.execute("DELETE FROM comp_usados WHERE id=?", (cid,))
@@ -256,6 +298,7 @@ def api_delete_comp_usado(cid):
 # ── REPETIR SEMANA ─────────────────────────────────────────────────────────────
 
 @app.route('/api/semana/<int:year>/<int:week>/repetir', methods=['POST'])
+@admin_required
 def api_repetir_semana(year, week):
     """Copia todos los turnos de la semana dada a la semana siguiente (o a dest_year/dest_week)."""
     data = request.json or {}
@@ -319,6 +362,7 @@ def api_excel_download():
     return send_file(EXCEL_PATH, as_attachment=True, download_name='horarios_data.xlsx')
 
 @app.route('/api/excel/import', methods=['POST'])
+@admin_required
 def api_excel_import():
     file = request.files.get('file')
     if not file:
@@ -329,6 +373,7 @@ def api_excel_import():
     return jsonify(result)
 
 @app.route('/api/excel/sync', methods=['POST'])
+@admin_required
 def api_excel_sync():
     """Re-import from the existing horarios_data.xlsx on disk."""
     if not os.path.exists(EXCEL_PATH):
@@ -444,6 +489,7 @@ def _import_from_excel():
 # ── AUSENCIAS (modificar Google Sheet) ────────────────────────────────────────
 
 @app.route('/api/ausencia', methods=['POST'])
+@admin_required
 def api_ausencia():
     """
     Mueve un empleado a una sección de ausencia en la Google Sheet y en la DB.
@@ -520,6 +566,7 @@ def api_gsheets_status():
     return jsonify({'ok': ok})
 
 @app.route('/api/gsheets/sync', methods=['POST'])
+@admin_required
 def api_gsheets_sync():
     secret = os.environ.get('SYNC_SECRET')
     if secret:
@@ -539,6 +586,7 @@ def api_gsheets_sync():
 
 
 @app.route('/api/ausencia/sheet', methods=['POST'])
+@admin_required
 def api_ausencia_sheet_only():
     """Modifica solo el Google Sheet (sin tocar la DB). Mismos campos que /api/ausencia."""
     data = request.json or {}
@@ -557,6 +605,7 @@ def api_ausencia_sheet_only():
 
 
 @app.route('/api/admin/setup-tabs', methods=['POST'])
+@admin_required
 def api_setup_tabs():
     """Crea/actualiza pestañas S#32-S#52 con encabezados de días fechados."""
     data = request.get_json() or {}
@@ -626,6 +675,7 @@ def _parse_solicitud(text):
 
 
 @app.route('/api/solicitud/parse', methods=['POST'])
+@admin_required
 def api_solicitud_parse():
     text = (request.json or {}).get('text', '')
     result, err = _parse_solicitud(text)
@@ -646,6 +696,7 @@ def api_solicitud_parse():
 
 
 @app.route('/api/solicitud/apply', methods=['POST'])
+@admin_required
 def api_solicitud_apply():
     data    = request.json or {}
     nombre  = data.get('nombre', '').strip().upper()
