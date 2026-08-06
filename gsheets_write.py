@@ -151,6 +151,35 @@ def move_to_absence(semana_num, empleado_name, dias, absence_type):
     return {'semana': semana_num, 'changes': changes}
 
 
+def write_to_pendientes(semana_num, empleado_name, dias, absence_type):
+    """
+    Escribe una fila en la pestaña PENDIENTES para que Apps Script la procese.
+    Crea la pestaña con encabezado si no existe.
+    Retorna dict con ok y datos básicos.
+    """
+    gc = _get_client()
+    sh = gc.open_by_key(SHEET_ID_V3)
+
+    try:
+        ws = sh.worksheet('PENDIENTES')
+    except gspread.exceptions.WorksheetNotFound:
+        ws = sh.add_worksheet(title='PENDIENTES', rows=200, cols=5)
+        ws.append_row(['SEMANA', 'EMPLEADO', 'TIPO', 'DIAS'])
+
+    ws.append_row([
+        semana_num,
+        empleado_name.strip().upper(),
+        absence_type.upper(),
+        ','.join(d.strip() for d in dias),
+    ])
+    return {
+        'ok':      True,
+        'semana':  semana_num,
+        'empleado': empleado_name.strip().upper(),
+        'pending': True,
+    }
+
+
 def setup_week_tabs(start_week=32, end_week=52, year=2026, template_week=34):
     """
     Para cada semana de start_week a end_week:

@@ -1205,18 +1205,12 @@ init();
         el('sol-apply-status').textContent = 'Error: ' + (data.error || 'desconocido');
         el('sol-apply-status').style.color = '#f87171';
       } else if (data.sheet_error) {
-        el('sol-apply-status').textContent = '✓ App actualizada. Error en Sheet: ' + data.sheet_error;
+        el('sol-apply-status').textContent = '✓ App actualizada. Error al escribir en Sheet: ' + data.sheet_error;
         el('sol-apply-status').style.color = '#fbbf24';
         loadWeek();
       } else {
-        const failed = (data.sheet_results || []).flatMap(r => (r.changes || []).filter(c => !c.ok).map(c => c.dia));
-        if (failed.length) {
-          el('sol-apply-status').textContent = '✓ App actualizada. Sheet: no se pudo colocar ' + failed.join(', ');
-          el('sol-apply-status').style.color = '#fbbf24';
-        } else {
-          el('sol-apply-status').textContent = '✓ Aplicado correctamente en la app y el Sheet.';
-          el('sol-apply-status').style.color = '#34d399';
-        }
+        el('sol-apply-status').innerHTML = '✓ App actualizada. Pendientes enviados al Sheet.<br><small>Abrí el Sheet → menú <b>Horarios SC</b> → <b>Procesar Pendientes</b></small>';
+        el('sol-apply-status').style.color = '#34d399';
         loadWeek();
       }
       el('sol-apply').disabled = false;

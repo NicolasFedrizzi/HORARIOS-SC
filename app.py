@@ -458,11 +458,11 @@ def api_ausencia():
     if not semana or not empleado or not dias or not tipo:
         return jsonify({'error': 'Faltan campos: semana, empleado, dias, tipo'}), 400
 
-    # 1. Modificar Google Sheet
+    # 1. Escribir en PENDIENTES para que Apps Script lo procese
     sheet_result = None
     try:
-        from gsheets_write import move_to_absence
-        sheet_result = move_to_absence(semana, empleado, dias, tipo)
+        from gsheets_write import write_to_pendientes
+        sheet_result = write_to_pendientes(semana, empleado, dias, tipo)
     except Exception as e:
         sheet_result = {'error': str(e)}
 
@@ -549,9 +549,9 @@ def api_ausencia_sheet_only():
     if not semana or not empleado or not dias or not tipo:
         return jsonify({'error': 'Faltan campos: semana, empleado, dias, tipo'}), 400
     try:
-        from gsheets_write import move_to_absence
-        result = move_to_absence(semana, empleado, dias, tipo)
-        return jsonify({'ok': True, 'sheet': result})
+        from gsheets_write import write_to_pendientes
+        result = write_to_pendientes(semana, empleado, dias, tipo)
+        return jsonify({'ok': True, 'sheet': result, 'pending': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
@@ -607,7 +607,7 @@ def _parse_solicitud(text):
     dias_m   = _re.search(r'D[ÍI]AS\s*:\s*(.+)', text, _re.IGNORECASE | _re.DOTALL)
     if not nombre_m or not tipo_m or not dias_m:
         return None, 'Formato incorrecto. Se esperan los campos NOMBRE, TIPO y DÍAS.'
-    nombre   = nombre_m.group(1).strip().upper()
+    nombre   = _re.sub(r'[\s.,;:]+$', '', nombre_m.group(1)).strip().upper()
     tipo_raw = tipo_m.group(1).strip().lower().split('\n')[0]
     tipo     = _TIPO_MAP.get(tipo_raw, tipo_raw.upper())
     dias_text = dias_m.group(1).strip()
@@ -675,7 +675,7 @@ def api_solicitud_apply():
     db.commit()
     db.close()
 
-    # Agrupar por semana y llamar a move_to_absence
+    # Agrupar por semana y escribir en PENDIENTES
     from collections import defaultdict
     by_semana = defaultdict(list)
     for f in fechas:
@@ -684,13 +684,13 @@ def api_solicitud_apply():
 
     sheet_results = []
     try:
-        from gsheets_write import move_to_absence
+        from gsheets_write import write_to_pendientes
         for semana_num, dias in by_semana.items():
-            sheet_results.append(move_to_absence(semana_num, nombre, dias, tipo))
+            sheet_results.append(write_to_pendientes(semana_num, nombre, dias, tipo))
     except Exception as e:
         return jsonify({'ok': True, 'db': 'ok', 'sheet_error': str(e), 'sheet_results': sheet_results})
 
-    return jsonify({'ok': True, 'db': 'ok', 'sheet': 'ok', 'sheet_results': sheet_results})
+    return jsonify({'ok': True, 'db': 'ok', 'sheet': 'pending', 'sheet_results': sheet_results})
 
 
 # ── INIT ───────────────────────────────────────────────────────────────────────
