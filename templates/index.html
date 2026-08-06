@@ -45,6 +45,7 @@
         <button class="view-toggle-btn" data-mode="cards" title="Vista tarjetas">▦</button>
         <button class="view-toggle-btn" data-mode="dia" title="Vista por día">☰</button>
       </div>
+      <button class="btn btn-ghost btn-sm" id="btn-solicitud" title="Procesar solicitud de ausencia por mail">✉ Solicitud</button>
       <button class="btn btn-ghost btn-sm" id="btn-excel-upload" title="Importar Excel">↑ Excel</button>
       <button class="btn btn-ghost btn-sm" id="btn-repetir" title="Copiar todos los turnos a la semana siguiente">↻ Repetir</button>
       <button class="btn btn-gsheets" id="btn-gsheets-sync">⟳ Google Sheets</button>
@@ -306,6 +307,41 @@
     </div>
     <div id="gs-aus-status" style="font-size:0.82rem;min-height:1rem;margin:0.4rem 0"></div>
     <button class="btn btn-primary btn-sm" id="gs-aus-confirm">Actualizar Sheet</button>
+  </div>
+</div>
+
+<!-- Solicitud modal -->
+<div class="modal-overlay" id="modal-solicitud">
+  <div class="modal" style="max-width:480px">
+    <h3>Procesar Solicitud</h3>
+    <p style="color:var(--text2);font-size:0.83rem;margin:0.4rem 0 0.9rem">
+      Pegá el mail con el formato:<br>
+      <code style="font-size:0.8rem;opacity:0.8">NOMBRE: Apellido Nombre<br>TIPO: compensatorio<br>DÍAS: lunes 3/8, viernes 14/8</code>
+    </p>
+    <textarea id="sol-text" rows="7" style="width:100%;box-sizing:border-box;background:var(--bg2);color:var(--text1);border:1px solid var(--border);border-radius:6px;padding:0.6rem;font-size:0.83rem;font-family:inherit;resize:vertical" placeholder="Pegá el texto del mail aquí..."></textarea>
+    <div id="sol-parse-status" style="font-size:0.82rem;margin:0.5rem 0;min-height:1rem"></div>
+
+    <div id="sol-preview" class="hidden" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:0.8rem;margin-bottom:0.8rem">
+      <div style="display:flex;gap:1rem;margin-bottom:0.5rem;flex-wrap:wrap">
+        <div>
+          <div style="font-size:0.72rem;color:var(--text2);margin-bottom:2px">EMPLEADO</div>
+          <div id="sol-prev-nombre" style="font-weight:600"></div>
+        </div>
+        <div>
+          <div style="font-size:0.72rem;color:var(--text2);margin-bottom:2px">TIPO</div>
+          <div id="sol-prev-tipo" style="font-weight:600"></div>
+        </div>
+      </div>
+      <div style="font-size:0.72rem;color:var(--text2);margin-bottom:4px">DÍAS</div>
+      <div id="sol-prev-dias" style="display:flex;flex-wrap:wrap;gap:0.3rem"></div>
+    </div>
+
+    <div id="sol-apply-status" style="font-size:0.82rem;margin:0.4rem 0;min-height:1rem"></div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" id="sol-cancel">Cancelar</button>
+      <button class="btn btn-ghost" id="sol-parse">Parsear</button>
+      <button class="btn btn-primary hidden" id="sol-apply">Aplicar</button>
+    </div>
   </div>
 </div>
 

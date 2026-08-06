@@ -570,6 +570,129 @@ def api_setup_tabs():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+# ── SOLICITUDES ────────────────────────────────────────────────────────────────
+
+import re as _re
+
+_MESES_ES = {
+    'enero':1,'febrero':2,'marzo':3,'abril':4,'mayo':5,'junio':6,
+    'julio':7,'agosto':8,'septiembre':9,'octubre':10,'noviembre':11,'diciembre':12,
+}
+_TIPO_MAP = {
+    'compensatorio':'COMPENSATORIO','compensatorios':'COMPENSATORIO',
+    'vacacion':'VACACION','vacaciones':'VACACION',
+    'franco':'FRANCO','francos':'FRANCO',
+    'off':'OFF',
+    'cumpleaños':'VACACION','cumpleanos':'VACACION',
+}
+_DAY_NAMES = {0:'lunes',1:'martes',2:'miercoles',3:'jueves',4:'viernes',5:'sabado',6:'domingo'}
+
+def _parse_fecha(text):
+    text = text.lower().strip()
+    for d in ['lunes','martes','miércoles','miercoles','jueves','viernes','sábado','sabado','domingo']:
+        text = text.replace(d, '').strip()
+    m = _re.match(r'^(\d{1,2})[/\-](\d{1,2})(?:[/\-]\d{2,4})?$', text)
+    if m:
+        return date(2026, int(m.group(2)), int(m.group(1)))
+    m = _re.match(r'^(\d{1,2})\s+de\s+([a-záéíóúü]+)$', text)
+    if m:
+        mes = _MESES_ES.get(m.group(2))
+        if mes:
+            return date(2026, mes, int(m.group(1)))
+    return None
+
+def _parse_solicitud(text):
+    nombre_m = _re.search(r'NOMBRE\s*:\s*(.+)', text, _re.IGNORECASE)
+    tipo_m   = _re.search(r'TIPO\s*:\s*(.+)',   text, _re.IGNORECASE)
+    dias_m   = _re.search(r'D[ÍI]AS\s*:\s*(.+)', text, _re.IGNORECASE | _re.DOTALL)
+    if not nombre_m or not tipo_m or not dias_m:
+        return None, 'Formato incorrecto. Se esperan los campos NOMBRE, TIPO y DÍAS.'
+    nombre   = nombre_m.group(1).strip().upper()
+    tipo_raw = tipo_m.group(1).strip().lower().split('\n')[0]
+    tipo     = _TIPO_MAP.get(tipo_raw, tipo_raw.upper())
+    dias_text = dias_m.group(1).strip()
+    fechas = []
+    for part in _re.split(r'[,\n]', dias_text):
+        part = part.strip()
+        if not part:
+            continue
+        f = _parse_fecha(part)
+        if f is None:
+            return None, f'No se pudo interpretar la fecha: "{part}"'
+        fechas.append(f.isoformat())
+    if not fechas:
+        return None, 'No se encontraron fechas válidas.'
+    return {'nombre': nombre, 'tipo': tipo, 'fechas': sorted(set(fechas))}, None
+
+
+@app.route('/api/solicitud/parse', methods=['POST'])
+def api_solicitud_parse():
+    text = (request.json or {}).get('text', '')
+    result, err = _parse_solicitud(text)
+    if err:
+        return jsonify({'ok': False, 'error': err})
+    # Enriquecer con semana y nombre del día para mostrar en UI
+    preview = []
+    for f in result['fechas']:
+        d = date.fromisoformat(f)
+        preview.append({
+            'fecha': f,
+            'dia':   _DAY_NAMES[d.weekday()],
+            'semana': d.isocalendar()[1],
+            'label':  f"{_DAY_NAMES[d.weekday()].capitalize()} {d.day}/{d.month}  (S#{d.isocalendar()[1]})",
+        })
+    result['preview'] = preview
+    return jsonify({'ok': True, 'parsed': result})
+
+
+@app.route('/api/solicitud/apply', methods=['POST'])
+def api_solicitud_apply():
+    data    = request.json or {}
+    nombre  = data.get('nombre', '').strip().upper()
+    tipo    = data.get('tipo', '').strip().upper()
+    fechas  = data.get('fechas', [])
+    if not nombre or not tipo or not fechas:
+        return jsonify({'ok': False, 'error': 'Faltan campos'}), 400
+
+    db = get_db()
+    emp = db.execute("SELECT id FROM empleados WHERE UPPER(TRIM(nombre))=?", (nombre,)).fetchone()
+    if not emp:
+        for row in db.execute("SELECT id, nombre FROM empleados").fetchall():
+            if nombre in row['nombre'].upper() or row['nombre'].upper() in nombre:
+                emp = row; break
+    if not emp:
+        db.close()
+        return jsonify({'ok': False, 'error': f'Empleado no encontrado: {nombre}'}), 404
+
+    emp_id = emp['id']
+    for f in fechas:
+        d = date.fromisoformat(f)
+        semana = d.isocalendar()[1]
+        db.execute("DELETE FROM turnos WHERE fecha=? AND empleado_id=?", (f, emp_id))
+        db.execute("""INSERT INTO turnos (fecha, semana, empleado_id, tipo, funcion, canal,
+                      show_inicio, show_fin, ingreso, egreso) VALUES (?,?,?,'libre',?,?,?,?,?,?)""",
+                   (f, semana, emp_id, tipo, '', '', '', '', ''))
+    db.commit()
+    db.close()
+
+    # Agrupar por semana y llamar a move_to_absence
+    from collections import defaultdict
+    by_semana = defaultdict(list)
+    for f in fechas:
+        d = date.fromisoformat(f)
+        by_semana[d.isocalendar()[1]].append(_DAY_NAMES[d.weekday()])
+
+    sheet_results = []
+    try:
+        from gsheets_write import move_to_absence
+        for semana_num, dias in by_semana.items():
+            sheet_results.append(move_to_absence(semana_num, nombre, dias, tipo))
+    except Exception as e:
+        return jsonify({'ok': True, 'db': 'ok', 'sheet_error': str(e), 'sheet_results': sheet_results})
+
+    return jsonify({'ok': True, 'db': 'ok', 'sheet': 'ok', 'sheet_results': sheet_results})
+
+
 # ── INIT ───────────────────────────────────────────────────────────────────────
 
 init_db()

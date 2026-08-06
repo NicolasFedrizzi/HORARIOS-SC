@@ -1142,6 +1142,83 @@ async function init() {
 init();
 
 // ── GOOGLE SHEETS SYNC ────────────────────────────────────────────────────────
+// ── SOLICITUD MODAL ────────────────────────────────────────────────────────────
+(function() {
+  var parsed = null;
+
+  el('btn-solicitud').addEventListener('click', () => {
+    parsed = null;
+    el('sol-text').value = '';
+    el('sol-parse-status').textContent = '';
+    el('sol-apply-status').textContent = '';
+    el('sol-preview').classList.add('hidden');
+    el('sol-apply').classList.add('hidden');
+    el('modal-solicitud').classList.add('open');
+  });
+
+  el('sol-cancel').addEventListener('click', () => el('modal-solicitud').classList.remove('open'));
+
+  el('sol-parse').addEventListener('click', async () => {
+    const text = el('sol-text').value.trim();
+    if (!text) { el('sol-parse-status').textContent = 'Pegá el texto del mail.'; return; }
+    el('sol-parse-status').textContent = 'Parseando...';
+    el('sol-parse-status').style.color = '';
+    el('sol-preview').classList.add('hidden');
+    el('sol-apply').classList.add('hidden');
+    el('sol-apply-status').textContent = '';
+    try {
+      const res  = await fetch('/api/solicitud/parse', { method:'POST',
+        headers:{'Content-Type':'application/json'}, body: JSON.stringify({text}) });
+      const data = await res.json();
+      if (!data.ok) {
+        el('sol-parse-status').textContent = data.error;
+        el('sol-parse-status').style.color = '#f87171';
+        return;
+      }
+      parsed = data.parsed;
+      el('sol-parse-status').textContent = '';
+      el('sol-prev-nombre').textContent = parsed.nombre;
+      el('sol-prev-tipo').textContent   = parsed.tipo;
+      const diasHtml = parsed.preview.map(function(p) {
+        return '<span style="background:var(--bg3,#333);padding:2px 8px;border-radius:4px;font-size:0.8rem">' + p.label + '</span>';
+      }).join('');
+      el('sol-prev-dias').innerHTML = diasHtml;
+      el('sol-preview').classList.remove('hidden');
+      el('sol-apply').classList.remove('hidden');
+    } catch(e) {
+      el('sol-parse-status').textContent = 'Error: ' + e.message;
+      el('sol-parse-status').style.color = '#f87171';
+    }
+  });
+
+  el('sol-apply').addEventListener('click', async () => {
+    if (!parsed) return;
+    el('sol-apply-status').textContent = 'Aplicando...';
+    el('sol-apply-status').style.color = '';
+    el('sol-apply').disabled = true;
+    try {
+      const res  = await fetch('/api/solicitud/apply', { method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({nombre: parsed.nombre, tipo: parsed.tipo, fechas: parsed.fechas}) });
+      const data = await res.json();
+      if (data.ok) {
+        el('sol-apply-status').textContent = '✓ Aplicado correctamente en la app y el Sheet.';
+        el('sol-apply-status').style.color = '#34d399';
+        el('sol-apply').disabled = false;
+        loadWeek();
+      } else {
+        el('sol-apply-status').textContent = 'Error: ' + (data.error || 'desconocido');
+        el('sol-apply-status').style.color = '#f87171';
+        el('sol-apply').disabled = false;
+      }
+    } catch(e) {
+      el('sol-apply-status').textContent = 'Error: ' + e.message;
+      el('sol-apply-status').style.color = '#f87171';
+      el('sol-apply').disabled = false;
+    }
+  });
+})();
+
 el('btn-gsheets-sync').addEventListener('click', () => {
   el('gs-week-from').value = S.week;
   el('gs-week-to').value   = S.week;
