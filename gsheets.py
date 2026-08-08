@@ -600,6 +600,10 @@ def parse_semana_v2b(year, semana_num, raw_csv):
     COLS_PER_DAY = 4
     NUM_DAYS = 7
 
+    # Auto-detectar si hay columna de etiquetas vacía al inicio (ej: S#33 con 31 cols vs S#32 con 27)
+    _r0 = [str(v).strip() for v in rows[0]] + [''] * 5 if rows else [''] * 5
+    COL_OFFSET = 1 if (_r0[0] == '' and 'LUNES' in _r0[1].upper()) else 0
+
     FUNC_MAP = {
         'AIRE':    'AIRE',
         'EDICIÓN': 'EDICION',
@@ -619,7 +623,7 @@ def parse_semana_v2b(year, semana_num, raw_csv):
 
     for row_idx, raw_row in enumerate(rows):
         row   = [str(v).strip() for v in raw_row] + [''] * (NUM_DAYS * COLS_PER_DAY + 4)
-        c0    = row[0];  c1 = row[1];  c2 = row[2]
+        c0    = row[COL_OFFSET];  c1 = row[COL_OFFSET+1];  c2 = row[COL_OFFSET+2]
         c0_up = c0.upper(); c1_up = c1.upper(); c2_up = c2.upper()
 
         if row_idx == 0:
@@ -643,7 +647,7 @@ def parse_semana_v2b(year, semana_num, raw_csv):
         if c0_up in ABSENCE_SECTIONS and not c1 and not c2:
             current_absence_fn = ABSENCE_SECTIONS[c0_up]
             current_task_fn    = None
-            has_any_emp = any(row[di * COLS_PER_DAY + 2] for di in range(NUM_DAYS))
+            has_any_emp = any(row[COL_OFFSET + di * COLS_PER_DAY + 2] for di in range(NUM_DAYS))
             if not has_any_emp:
                 continue  # solo header sin empleados → siguiente fila
 
@@ -660,7 +664,7 @@ def parse_semana_v2b(year, semana_num, raw_csv):
         _lunes_show = _parse_time_range(c0) if re.search(r'\d{1,2}:\d{2}', c0) else None
 
         for di in range(NUM_DAYS):
-            off   = di * COLS_PER_DAY
+            off   = COL_OFFSET + di * COLS_PER_DAY
             d0    = row[off];     d1 = row[off + 1];  d2 = row[off + 2]
             d0_up = d0.upper();  d1_up = d1.upper();  d2_up = d2.upper()
 
@@ -787,12 +791,13 @@ def import_from_gsheets(db, year, weeks):
     for semana_num in weeks:
         try:
             # v2b: pestañas 'HORARIO SC 2026 - S#N'
-            # Auto-detecta formato: ≤28 cols → 4-col (v2b), >28 → 5-col (v3)
+            # Auto-detecta formato: si la fila 0 tiene "LUNES" en las primeras 3 cols → v2b (4-col/día), si no → v3 (5-col/día)
             csv_v2b = fetch_semana_v2b_csv(semana_num)
             if csv_v2b:
                 import pandas as _pd; from io import StringIO as _SIO
-                _ncols = len(_pd.read_csv(_SIO(csv_v2b), header=None, nrows=1).columns)
-                turnos = parse_semana_v2b(year, semana_num, csv_v2b) if _ncols <= 28 else parse_semana_v3(year, semana_num, csv_v2b)
+                _hrow = _pd.read_csv(_SIO(csv_v2b), header=None, nrows=1, dtype=str).iloc[0].fillna('').astype(str)
+                _is_v2b = any('LUNES' in str(v).upper() for v in _hrow.iloc[:3])
+                turnos = parse_semana_v2b(year, semana_num, csv_v2b) if _is_v2b else parse_semana_v3(year, semana_num, csv_v2b)
             else:
                 turnos = []
 
